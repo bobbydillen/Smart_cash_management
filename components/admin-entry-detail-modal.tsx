@@ -1,22 +1,23 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { DayEntry, DenominationCount } from "@/lib/types"
 import
-{
-  calculateTotalPayments,
-  calculateExpectedCash,
-  calculateClosingCash,
-} from "@/lib/types"
+  {
+    calculateCashSales,
+    calculateClosingCash,
+    calculatePaymentSummary,
+    calculateExpectedCashWithInOut,
+  } from "@/lib/types"
 import { X } from "lucide-react"
 import
-{
-  updateEntryOpeningCash,
-  updateEntryClosingCash,
-} from "@/app/actions/admin"
+  {
+    updateEntryOpeningCash,
+    updateEntryClosingCash,
+  } from "@/app/actions/admin"
 
 interface AdminEntryDetailModalProps
 {
@@ -31,76 +32,77 @@ export default function AdminEntryDetailModal ( {
   onUpdate,
 }: AdminEntryDetailModalProps )
 {
+
+  /* ================= STATE ================= */
+
+  // ✅ OPENING
   const [ openingCash, setOpeningCash ] = useState( entry.openingCash )
-  const [ denominations, setDenominations ] = useState<DenominationCount>(
-    entry.closingDenominations
-  )
+  const [ openingDenominations, setOpeningDenominations ] =
+    useState<DenominationCount>( entry.openingDenominations )
 
-  /* =====================================================
-     ✅ CORRECT CASH SALES CALCULATION
-     ===================================================== */
+  // ✅ CLOSING
+  const [ closingDenominations, setClosingDenominations ] =
+    useState<DenominationCount>( entry.closingDenominations )
+
+  /* ================= SYNC ENTRY ================= */
+
+  useEffect( () =>
+  {
+    setOpeningCash( entry.openingCash )
+    setOpeningDenominations( entry.openingDenominations )
+    setClosingDenominations( entry.closingDenominations )
+  }, [ entry ] )
+
+  /* ================= CASH SALES ================= */
+
   const isFashionBoth = entry.counterName === "Smart Fashion (Both)"
+  const cashSales = calculateCashSales( entry.sales, isFashionBoth )
 
-  let totalCashSales = 0
+  /* ================= PAYMENTS ================= */
 
-  if ( isFashionBoth )
-  {
-    const martCash =
-      ( entry.sales.martTotalSales || 0 ) -
-      ( entry.sales.martCardUpi || 0 ) -
-      ( entry.sales.martCredit || 0 )
+  const { totalIn, totalOut } = calculatePaymentSummary( entry.payments )
 
-    const fashionCash =
-      ( entry.sales.fashionTotalSales || 0 ) -
-      ( entry.sales.fashionCardUpi || 0 ) -
-      ( entry.sales.fashionCredit || 0 )
+  /* ================= CALCULATIONS ================= */
 
-    totalCashSales = martCash + fashionCash
-  } else
-  {
-    totalCashSales =
-      ( entry.sales.totalSales || 0 ) -
-      ( entry.sales.cardUpiSales || 0 ) -
-      ( entry.sales.creditSales || 0 )
-  }
-
-  /* ===================================================== */
-
-  const totalPayments = calculateTotalPayments( entry.payments )
-  const expectedCash = calculateExpectedCash(
+  const expectedCash = calculateExpectedCashWithInOut(
     openingCash,
-    totalCashSales,
-    totalPayments
+    cashSales,
+    entry.payments
   )
-  const actualCash = calculateClosingCash( denominations )
+
+  const actualCash = calculateClosingCash( closingDenominations )
   const shortage = expectedCash - actualCash
+
+  /* ================= ACTIONS ================= */
 
   const handleUpdateOpening = async () =>
   {
-    await updateEntryOpeningCash( entry._id!, openingCash )
+    await updateEntryOpeningCash(
+      entry._id!,
+      openingCash,
+      openingDenominations
+    )
     onUpdate()
   }
 
   const handleUpdateClosing = async () =>
   {
-    await updateEntryClosingCash( entry._id!, denominations )
+    await updateEntryClosingCash( entry._id!, closingDenominations )
     onUpdate()
   }
+
+  /* ================= JSX ================= */
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-background rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        {/* HEADER */ }
-        <div className="sticky top-0 bg-background border-b border-border p-4 flex items-center justify-between">
+
+        {/* ===== HEADER ===== */ }
+        <div className="sticky top-0 bg-background border-b p-4 flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-bold">{ entry.counterName }</h2>
             <p className="text-sm text-muted-foreground">
-              { new Date( entry.date ).toLocaleDateString( "en-IN", {
-                weekday: "long",
-                year: "numeric",
-                month: "long",
-                day: "numeric",
-              } ) }
+              { new Date( entry.date ).toLocaleDateString( "en-IN" ) }
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={ onClose }>
@@ -109,82 +111,59 @@ export default function AdminEntryDetailModal ( {
         </div>
 
         <div className="p-6 space-y-6">
-          {/* PAYMENTS */ }
+
+          {/* ===== OPENING CASH ===== */ }
           <Card className="p-6">
-            <h3 className="text-lg font-bold mb-4">Payments</h3>
-            <div className="space-y-2">
-              { entry.payments.map( ( payment, index ) => (
-                <div
-                  key={ index }
-                  className="flex justify-between p-3 bg-secondary rounded-lg"
-                >
-                  <div>
-                    <div className="font-medium">{ payment.description }</div>
-                    <div className="text-sm text-muted-foreground">
-                      { new Date( payment.time ).toLocaleTimeString( "en-IN" ) }
-                    </div>
-                  </div>
-                  <div className="text-lg font-bold">
-                    ₹{ payment.amount.toFixed( 2 ) }
-                  </div>
+            <h3 className="text-lg font-bold mb-4">
+              Opening Cash (Admin Override)
+            </h3>
+
+            <Input
+              type="number"
+              value={ openingCash }
+              onChange={ e => setOpeningCash( Number( e.target.value ) || 0 ) }
+            />
+
+            <div className="grid grid-cols-4 gap-3 mt-4">
+              { Object.entries( openingDenominations ).map( ( [ k, v ] ) => (
+                <div key={ k }>
+                  <label className="text-xs">{ k }</label>
+                  <Input
+                    type="number"
+                    value={ v }
+                    onChange={ e =>
+                      setOpeningDenominations( {
+                        ...openingDenominations,
+                        [ k ]: Number( e.target.value ) || 0,
+                      } )
+                    }
+                  />
                 </div>
               ) ) }
-              <div className="bg-primary/10 p-4 rounded-lg flex justify-between">
-                <span className="font-medium">Total Payments</span>
-                <span className="text-2xl font-bold text-primary">
-                  ₹{ totalPayments.toFixed( 2 ) }
-                </span>
-              </div>
             </div>
+
+            <Button className="mt-4" onClick={ handleUpdateOpening }>
+              Update Opening
+            </Button>
           </Card>
 
-          {/* OPENING CASH */ }
+          {/* ===== CLOSING DENOMINATIONS ===== */ }
           <Card className="p-6">
             <h3 className="text-lg font-bold mb-4">
-              Opening Cash (Admin Can Override)
-            </h3>
-            <div className="flex gap-3 items-end">
-              <Input
-                type="number"
-                value={ openingCash }
-                onChange={ ( e ) =>
-                  setOpeningCash( Number.parseFloat( e.target.value ) || 0 )
-                }
-              />
-              <Button onClick={ handleUpdateOpening }>
-                Update Opening
-              </Button>
-            </div>
-          </Card>
-
-          {/* CLOSING CASH */ }
-          <Card className="p-6">
-            <h3 className="text-lg font-bold mb-4">
-              Closing Cash (Admin Can Edit)
+              Closing Denominations
             </h3>
 
             <div className="grid grid-cols-4 gap-3">
-              { [
-                [ "₹500", "notes500" ],
-                [ "₹200", "notes200" ],
-                [ "₹100", "notes100" ],
-                [ "₹50", "notes50" ],
-                [ "₹20", "notes20" ],
-                [ "₹10", "notes10" ],
-                [ "₹10 coin", "coins10" ],
-                [ "₹5 coin", "coins5" ],
-                [ "₹2 coin", "coins2" ],
-                [ "₹1 coin", "coins1" ],
-              ].map( ( [ label, key ] ) => (
-                <div key={ key }>
-                  <label className="text-sm font-medium">{ label }</label>
+              { Object.entries( closingDenominations ).map( ( [ k, v ] ) => (
+                <div key={ k }>
+                  <label className="text-xs">{ k }</label>
                   <Input
                     type="number"
-                    value={ denominations[ key as keyof DenominationCount ] }
-                    onChange={ ( e ) =>
-                      setDenominations( {
-                        ...denominations,
-                        [ key ]: Number.parseInt( e.target.value ) || 0,
+                    value={ v }
+                    onChange={ e =>
+                      setClosingDenominations( {
+                        ...closingDenominations,
+                        [ k ]: Number( e.target.value ) || 0,
                       } )
                     }
                   />
@@ -193,71 +172,65 @@ export default function AdminEntryDetailModal ( {
             </div>
 
             <Button className="mt-4" onClick={ handleUpdateClosing }>
-              Update Closing Cash
+              Update Closing
             </Button>
           </Card>
 
-          {/* CASH RECONCILIATION */ }
+          {/* ===== CASH RECONCILIATION ===== */ }
           <Card className="p-6">
             <h3 className="text-lg font-bold mb-4">Cash Reconciliation</h3>
 
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span>Opening Cash</span>
-                <span className="font-bold">
-                  ₹{ openingCash.toFixed( 2 ) }
-                </span>
+                <span>₹{ openingCash.toFixed( 2 ) }</span>
               </div>
 
               <div className="flex justify-between text-green-600">
                 <span>+ Cash Sales</span>
-                <span className="font-bold">
-                  ₹{ totalCashSales.toFixed( 2 ) }
-                </span>
+                <span>₹{ cashSales.toFixed( 2 ) }</span>
+              </div>
+
+              <div className="flex justify-between text-green-600">
+                <span>+ Payments In</span>
+                <span>₹{ totalIn.toFixed( 2 ) }</span>
               </div>
 
               <div className="flex justify-between text-red-600">
-                <span>- Payments</span>
-                <span className="font-bold">
-                  ₹{ totalPayments.toFixed( 2 ) }
-                </span>
+                <span>- Payments Out</span>
+                <span>₹{ totalOut.toFixed( 2 ) }</span>
               </div>
 
-              <div className="border-t pt-2 flex justify-between">
-                <span className="font-bold">Expected Cash</span>
-                <span className="text-xl font-bold">
-                  ₹{ expectedCash.toFixed( 2 ) }
-                </span>
+              <div className="border-t pt-2 flex justify-between font-bold">
+                <span>Expected Cash</span>
+                <span>₹{ expectedCash.toFixed( 2 ) }</span>
               </div>
 
-              <div className="flex justify-between">
-                <span className="font-bold">Actual Cash</span>
-                <span className="text-xl font-bold">
-                  ₹{ actualCash.toFixed( 2 ) }
-                </span>
+              <div className="flex justify-between font-bold">
+                <span>Actual Cash</span>
+                <span>₹{ actualCash.toFixed( 2 ) }</span>
               </div>
 
               <div
-                className={ `border-t pt-2 flex justify-between ${ shortage > 0
-                  ? "text-red-600"
-                  : shortage < 0
-                    ? "text-green-600"
-                    : ""
+                className={ `border-t pt-2 flex justify-between text-2xl font-extrabold ${ shortage > 0
+                    ? "text-red-600"
+                    : shortage < 0
+                      ? "text-green-600"
+                      : ""
                   }` }
               >
-                <span className="text-xl font-bold">
+                <span>
                   { shortage > 0
-                    ? "Shortage"
+                    ? "SHORTAGE"
                     : shortage < 0
-                      ? "Excess"
-                      : "Balanced" }
+                      ? "EXCESS"
+                      : "BALANCED" }
                 </span>
-                <span className="text-3xl font-bold">
-                  ₹{ Math.abs( shortage ).toFixed( 2 ) }
-                </span>
+                <span>₹{ Math.abs( shortage ).toFixed( 2 ) }</span>
               </div>
             </div>
           </Card>
+
         </div>
       </div>
     </div>

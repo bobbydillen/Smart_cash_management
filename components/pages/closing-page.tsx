@@ -1,24 +1,23 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { DayEntry, DenominationCount } from "@/lib/types"
-import
-{
+import {
   calculateClosingCash,
   calculateCashSales,
-  calculateExpectedCash,
-  calculateTotalPayments,
+  calculatePaymentSummary,
+  calculateExpectedCashWithInOut,
 } from "@/lib/types"
-import
-{
+import {
   updateClosingCash,
   setNextDayOpening,
   submitDay,
+  getOpeningCashForDate,
 } from "@/app/actions/counter"
-import { Printer } from "lucide-react"
+import { Printer, Save } from "lucide-react"
 
 /* ================= CONSTANTS ================= */
 
@@ -35,107 +34,150 @@ const EMPTY_DENOMS: DenominationCount = {
   coins1: 0,
 }
 
-const NOTES = [
+const DENOMS = [
   [ "₹500", "notes500", 500 ],
   [ "₹200", "notes200", 200 ],
   [ "₹100", "notes100", 100 ],
   [ "₹50", "notes50", 50 ],
   [ "₹20", "notes20", 20 ],
   [ "₹10", "notes10", 10 ],
-] as const
-
-const COINS = [
   [ "₹10", "coins10", 10 ],
   [ "₹5", "coins5", 5 ],
   [ "₹2", "coins2", 2 ],
   [ "₹1", "coins1", 1 ],
 ] as const
 
-interface ClosingPageProps
+/* ================= HELPERS ================= */
+
+const cloneDenoms = ( d: DenominationCount ): DenominationCount => ( { ...d } )
+
+const subtractDenoms = (
+  closing: DenominationCount,
+  nextDay: DenominationCount
+): DenominationCount =>
 {
-  entry: DayEntry
-  user: { username: string; counterName?: string }
-  refreshEntry: () => Promise<void>
-  isReadOnly: boolean
+  const r = { ...EMPTY_DENOMS }
+  ;( Object.keys( r ) as ( keyof DenominationCount )[] ).forEach( ( k ) =>
+  {
+    r[ k ] = Math.max( 0, closing[ k ] - ( nextDay[ k ] || 0 ) )
+  } )
+  return r
 }
+
+const FixedInput = ( props: any ) => (
+  <Input
+    { ...props }
+    className="w-20 text-center tabular-nums"
+    onWheel={ e => ( e.target as HTMLInputElement ).blur() }
+  />
+)
+
+/* ================= COMPONENT ================= */
 
 export default function ClosingPage ( {
   entry,
   user,
   refreshEntry,
   isReadOnly,
-}: ClosingPageProps )
+}: {
+  entry: DayEntry
+  user: { username: string; counterName?: string }
+  refreshEntry: () => Promise<void>
+  isReadOnly: boolean
+} )
 {
-  /* ---------- STATE ---------- */
-  const [ closing, setClosing ] = useState<DenominationCount>( () => entry.closingDenominations )
-  const [ nextDay, setNextDay ] = useState<DenominationCount>(
-    () => entry.nextDayOpeningDenominations || EMPTY_DENOMS
+  /* ================= STATE ================= */
+
+  const [ closing, setClosing ] = useState(
+    cloneDenoms( entry.closingDenominations )
   )
-  const [ isSubmitting, setIsSubmitting ] = useState( false )
 
+  const [ nextDay, setNextDay ] = useState(
+    entry.nextDayOpeningDenominations
+      ? cloneDenoms( entry.nextDayOpeningDenominations )
+      : cloneDenoms( EMPTY_DENOMS )
+  )
+
+  const [ closedBy, setClosedBy ] = useState( entry.closedBy || "" )
+  const [ openingCash, setOpeningCash ] = useState( 0 )
   const printRef = useRef<HTMLDivElement>( null )
-  const saveTimer = useRef<NodeJS.Timeout>()
-  const nextDayTimer = useRef<NodeJS.Timeout>()
 
-  /* ---------- HELPERS ---------- */
-  const safeQty = ( v: string ) => Math.max( 0, Number( v ) || 0 )
-  const safeNextQty = ( k: keyof DenominationCount, v: string ) =>
-    Math.min( safeQty( v ), closing[ k ] )
-
-  /* ---------- AUTOSAVE ---------- */
-  useEffect( () =>
-  {
-    if ( isReadOnly ) return
-    clearTimeout( saveTimer.current )
-    saveTimer.current = setTimeout( () =>
-    {
-      updateClosingCash( closing, entry.date )
-    }, 800 )
-  }, [ closing, isReadOnly, entry.date ] )
+  /* ================= SYNC ENTRY ================= */
 
   useEffect( () =>
   {
-    if ( isReadOnly ) return
-    clearTimeout( nextDayTimer.current )
-    const total = calculateClosingCash( nextDay )
-    nextDayTimer.current = setTimeout( () =>
-    {
-      setNextDayOpening( total, nextDay, entry.date )
-    }, 800 )
-  }, [ nextDay, isReadOnly, entry.date ] )
+    setClosing( cloneDenoms( entry.closingDenominations ) )
+    setNextDay(
+      entry.nextDayOpeningDenominations
+        ? cloneDenoms( entry.nextDayOpeningDenominations )
+        : cloneDenoms( EMPTY_DENOMS )
+    )
+    setClosedBy( entry.closedBy || "" )
+  }, [ entry ] )
 
-  /* ---------- CALCULATIONS ---------- */
+  /* ================= OPENING CASH (SOURCE OF TRUTH) ================= */
+
+  useEffect( () =>
+  {
+    getOpeningCashForDate( entry.date ).then( res =>
+    {
+      if ( !res?.error )
+      {
+        setOpeningCash( res.cash )
+      }
+    } )
+  }, [ entry.date ] )
+
+  /* ================= CALCULATIONS ================= */
+
   const isFashionBoth = entry.counterName === "Smart Fashion (Both)"
-  const totalPayments = calculateTotalPayments( entry.payments )
   const cashSales = calculateCashSales( entry.sales, isFashionBoth )
+  const { totalIn, totalOut } = calculatePaymentSummary( entry.payments )
 
-  const expectedCash = calculateExpectedCash(
-    entry.openingCash,
+  const expectedCash = calculateExpectedCashWithInOut(
+    openingCash,
     cashSales,
-    totalPayments
+    entry.payments
   )
 
   const actualCash = calculateClosingCash( closing )
+  const nextDayTotal = calculateClosingCash( nextDay )
+
+  const availableDenoms = subtractDenoms( closing, nextDay )
+  const availableCash = calculateClosingCash( availableDenoms )
+
   const shortage = expectedCash - actualCash
 
-  const nextDayTotal = calculateClosingCash( nextDay )
-  const availableCash = actualCash - nextDayTotal
+  /* ================= ACTIONS ================= */
 
-  /* ---------- ACTIONS ---------- */
+  const saveClosing = async () =>
+  {
+    await updateClosingCash( cloneDenoms( closing ), entry.date )
+    await refreshEntry()
+  }
+
+  const saveNextDay = async () =>
+  {
+    await setNextDayOpening(
+      nextDayTotal,
+      cloneDenoms( nextDay ),
+      entry.date
+    )
+    await refreshEntry()
+  }
+
   const handleSubmit = async () =>
   {
-    setIsSubmitting( true )
-    await updateClosingCash( closing, entry.date )
-    await setNextDayOpening( nextDayTotal, nextDay, entry.date )
-    await submitDay( entry.date )
+    await saveClosing()
+    await saveNextDay()
+    await submitDay( entry.date, closedBy )
     await refreshEntry()
-    setIsSubmitting( false )
   }
 
   const handlePrint = () =>
   {
     if ( !printRef.current ) return
-    const w = window.open( "", "", "width=380,height=600" )
+    const w = window.open( "", "", "width=380,height=900" )
     if ( !w ) return
     w.document.write( `
       <html>
@@ -145,126 +187,311 @@ export default function ClosingPage ( {
             table { width: 100%; border-collapse: collapse; }
             td { padding: 4px; }
             .right { text-align: right; }
-            .total { border-top: 1px solid #000; font-weight: bold; }
-            .highlight {
-              font-weight: 900;
-              font-size: 15px;
-              letter-spacing: 0.5px;
-            }
+            .bold { font-weight: bold; }
+            .big { font-size: 14px; font-weight: 800; }
+            .line { border-top: 1px solid #000; }
           </style>
         </head>
         <body>
           ${ printRef.current.innerHTML }
         </body>
       </html>
-    `)
+    ` )
     w.document.close()
     w.print()
   }
 
-  /* ---------- RENDER HELPERS ---------- */
-  const renderRows = (
-    rows: readonly ( readonly [ string, keyof DenominationCount, number ] )[],
-    state: DenominationCount,
-    setter: React.Dispatch<React.SetStateAction<DenominationCount>>,
-    limit?: boolean
-  ) =>
-    rows.map( ( [ label, key, value ] ) => (
-      <tr key={ key }>
-        <td>{ label }</td>
-        <td className="text-center">
-          <Input
-            type="number"
-            min={ 0 }
-            className="w-16 text-center mx-auto"
-            value={ state[ key ] }
-            disabled={ isReadOnly }
-            onChange={ ( e ) =>
-              setter( ( p ) => ( {
-                ...p,
-                [ key ]: limit
-                  ? safeNextQty( key, e.target.value )
-                  : safeQty( e.target.value ),
-              } ) )
-            }
-          />
-        </td>
-        <td className="right">₹{ ( state[ key ] * value ).toFixed( 2 ) }</td>
-      </tr>
-    ) )
-
   /* ================= JSX ================= */
-  return (
-    <div className="space-y-6">
 
-      {/* Closing Cash */ }
-      <Card className="p-4">
-        <h3 className="font-bold mb-2">Closing Cash Count</h3>
-        <table className="w-full text-sm">
-          <tbody>
-            <tr><td colSpan={ 3 } className="font-semibold">Cash (Notes)</td></tr>
-            { renderRows( NOTES, closing, setClosing ) }
-            <tr><td colSpan={ 3 } className="font-semibold pt-2">Coins</td></tr>
-            { renderRows( COINS, closing, setClosing ) }
-          </tbody>
-        </table>
+  return (
+    <div className="space-y-4">
+
+      {/* CLOSED BY */}
+      <Card className="p-3">
+        <label className="text-sm font-semibold">Closed By</label>
+        <Input
+          value={ closedBy }
+          disabled={ isReadOnly }
+          onChange={ e => setClosedBy( e.target.value ) }
+        />
       </Card>
 
-      {/* Summary */ }
+      {/* CLOSING CASH */}
       <Card className="p-4">
-        <div className="flex justify-between"><span>Expected Cash</span><span>₹{ expectedCash.toFixed( 2 ) }</span></div>
-        <div className="flex justify-between"><span>Actual Cash</span><span>₹{ actualCash.toFixed( 2 ) }</span></div>
-        <div className="flex justify-between font-bold">
-          <span>{ shortage > 0 ? "Shortage" : "Excess" }</span>
-          <span>₹{ Math.abs( shortage ).toFixed( 2 ) }</span>
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-bold">Closing Cash</h3>
+          { !isReadOnly && (
+            <Button size="sm" variant="outline" onClick={ saveClosing }>
+              <Save className="w-4 h-4 mr-1" /> Save
+            </Button>
+          ) }
+        </div>
+
+        <table className="w-full text-sm">
+          <tbody>
+            { DENOMS.map( ( [ l, k, v ] ) => (
+              <tr key={ k }>
+                <td>{ l }</td>
+                <td>
+                  <FixedInput
+                    type="number"
+                    value={ closing[ k ] }
+                    disabled={ isReadOnly }
+                    onChange={ e =>
+                      setClosing( {
+                        ...closing,
+                        [ k ]: Number( e.target.value ) || 0,
+                      } )
+                    }
+                  />
+                </td>
+                <td className="text-right">
+                  ₹{ ( closing[ k ] * v ).toFixed( 2 ) }
+                </td>
+              </tr>
+            ) ) }
+            <tr className="border-t font-bold">
+              <td>Total Actual Cash</td>
+              <td />
+              <td className="text-right">₹{ actualCash.toFixed( 2 ) }</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* CASH RECONCILIATION */}
+        <div className="mt-4 space-y-1 text-sm">
+          <div className="flex justify-between">
+            <span>Opening Cash</span>
+            <span>₹{ openingCash.toFixed( 2 ) }</span>
+          </div>
+          <div className="flex justify-between text-green-600">
+            <span>+ Cash Sales</span>
+            <span>₹{ cashSales.toFixed( 2 ) }</span>
+          </div>
+          <div className="flex justify-between text-green-600">
+            <span>+ Payments In</span>
+            <span>₹{ totalIn.toFixed( 2 ) }</span>
+          </div>
+          <div className="flex justify-between text-red-600">
+            <span>- Payments Out</span>
+            <span>₹{ totalOut.toFixed( 2 ) }</span>
+          </div>
+          <div className="border-t pt-1 flex justify-between font-bold">
+            <span>Expected Cash</span>
+            <span>₹{ expectedCash.toFixed( 2 ) }</span>
+          </div>
+          <div
+            className={ `flex justify-between font-bold ${
+              shortage > 0 ? "text-red-600" : "text-green-600"
+            }` }
+          >
+            <span>{ shortage > 0 ? "SHORTAGE" : "EXCESS" }</span>
+            <span>₹{ Math.abs( shortage ).toFixed( 2 ) }</span>
+          </div>
         </div>
       </Card>
 
-      {/* Next Day Opening */ }
+      {/* NEXT DAY OPENING */}
       <Card className="p-4">
-        <h3 className="font-bold mb-2">Next Day Opening Cash</h3>
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="font-bold">Next Day Opening</h3>
+          { !isReadOnly && (
+            <Button size="sm" variant="outline" onClick={ saveNextDay }>
+              <Save className="w-4 h-4 mr-1" /> Save
+            </Button>
+          ) }
+        </div>
+
         <table className="w-full text-sm">
           <tbody>
-            <tr><td colSpan={ 3 } className="font-semibold">Cash (Notes)</td></tr>
-            { renderRows( NOTES, nextDay, setNextDay, true ) }
-            <tr><td colSpan={ 3 } className="font-semibold pt-2">Coins</td></tr>
-            { renderRows( COINS, nextDay, setNextDay, true ) }
-          </tbody>
-        </table>
-      </Card>
-
-      {/* Print Preview */ }
-      <Card className="p-4" ref={ printRef }>
-        <h3 className="text-center font-bold">Smart Mart & Smart Fashions</h3>
-        <p className="text-center text-sm">{ user.counterName }</p>
-        <p className="text-center text-xs mb-2">{ new Date( entry.date ).toLocaleDateString( "en-IN" ) }</p>
-
-        <table className="text-sm w-full">
-          <tbody>
-            <tr><td>Opening Cash</td><td className="right">₹{ entry.openingCash.toFixed( 2 ) }</td></tr>
-            <tr><td>Cash Sales</td><td className="right">₹{ cashSales.toFixed( 2 ) }</td></tr>
-            <tr><td>Payments</td><td className="right">-₹{ totalPayments.toFixed( 2 ) }</td></tr>
-            <tr className="total"><td>Expected Cash</td><td className="right">₹{ expectedCash.toFixed( 2 ) }</td></tr>
-            <tr className="total"><td>Actual Cash</td><td className="right">₹{ actualCash.toFixed( 2 ) }</td></tr>
-            <tr className="total highlight">
-              <td>{ shortage > 0 ? "SHORTAGE" : "EXCESS" }</td>
-              <td className="right">₹{ Math.abs( shortage ).toFixed( 2 ) }</td>
+            { DENOMS.map( ( [ l, k, v ] ) => (
+              <tr key={ k }>
+                <td>{ l }</td>
+                <td>
+                  <FixedInput
+                    type="number"
+                    value={ nextDay[ k ] }
+                    disabled={ isReadOnly }
+                    onChange={ e =>
+                      setNextDay( {
+                        ...nextDay,
+                        [ k ]: Math.min(
+                          Number( e.target.value ) || 0,
+                          closing[ k ]
+                        ),
+                      } )
+                    }
+                  />
+                </td>
+                <td className="text-right">
+                  ₹{ ( nextDay[ k ] * v ).toFixed( 2 ) }
+                </td>
+              </tr>
+            ) ) }
+            <tr className="border-t text-lg font-bold">
+              <td>Next Day Total</td>
+              <td />
+              <td className="text-right">₹{ nextDayTotal.toFixed( 2 ) }</td>
             </tr>
-            <tr className="total"><td>Next Day Opening</td><td className="right">₹{ nextDayTotal.toFixed( 2 ) }</td></tr>
-            <tr className="total"><td>Available Cash</td><td className="right">₹{ availableCash.toFixed( 2 ) }</td></tr>
           </tbody>
         </table>
       </Card>
 
-      <Button onClick={ handlePrint } variant="outline" className="w-full">
-        <Printer className="w-4 h-4 mr-2" /> Print Cash Summary
-      </Button>
+      {/* AVAILABLE CASH */}
+      <Card className="p-4">
+        <h3 className="font-bold mb-2">Available Cash (Auto Calculated)</h3>
+        <table className="w-full text-sm">
+          <tbody>
+            { DENOMS.map( ( [ l, k, v ] ) =>
+              availableDenoms[ k ] > 0 ? (
+                <tr key={ k }>
+                  <td>{ l } × { availableDenoms[ k ] }</td>
+                  <td />
+                  <td className="text-right">
+                    ₹{ ( availableDenoms[ k ] * v ).toFixed( 2 ) }
+                  </td>
+                </tr>
+              ) : null
+            ) }
+            <tr className="border-t font-bold">
+              <td>Available Cash Total</td>
+              <td />
+              <td className="text-right">₹{ availableCash.toFixed( 2 ) }</td>
+            </tr>
+          </tbody>
+        </table>
+      </Card>
+
+      {/* PRINT PREVIEW */}
+      <Card ref={ printRef } className="p-3 text-sm">
+  <div className="center bold">Smart Mart & Smart Fashions</div>
+  <div className="center bold">{ user.counterName }</div>
+  <div className="center text-xs">{ entry.date }</div>
+  <div className="line" />
+
+  <table>
+    <tbody>
+      <tr>
+        <td>Opening Cash</td>
+        <td className="right">₹{ openingCash.toFixed( 2 ) }</td>
+      </tr>
+      <tr>
+        <td>Total Sales</td>
+        <td className="right">
+          ₹{ ( cashSales + totalIn + totalOut ).toFixed( 2 ) }
+        </td>
+      </tr>
+      <tr>
+        <td>Cash Sales</td>
+        <td className="right">₹{ cashSales.toFixed( 2 ) }</td>
+      </tr>
+      <tr>
+        <td>Payments IN</td>
+        <td className="right">₹{ totalIn.toFixed( 2 ) }</td>
+      </tr>
+      <tr>
+        <td>Payments OUT</td>
+        <td className="right">₹{ totalOut.toFixed( 2 ) }</td>
+      </tr>
+      <tr className="bold">
+        <td>Expected Cash</td>
+        <td className="right">₹{ expectedCash.toFixed( 2 ) }</td>
+      </tr>
+      <tr className="bold">
+        <td>Actual Cash</td>
+        <td className="right">₹{ actualCash.toFixed( 2 ) }</td>
+      </tr>
+      <tr className="bold">
+        <td>{ shortage > 0 ? "SHORTAGE" : "EXCESS" }</td>
+        <td className="right">
+          ₹{ Math.abs( shortage ).toFixed( 2 ) }
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div className="line" />
+  <div className="center bold">Available Cash Denominations</div>
+
+  <table>
+    <tbody>
+      { DENOMS.map( ( [ l, k, v ] ) =>
+        availableDenoms[ k ] > 0 ? (
+          <tr key={ k }>
+            <td>{ l } × { availableDenoms[ k ] }</td>
+            <td className="right">
+              ₹{ ( availableDenoms[ k ] * v ).toFixed( 2 ) }
+            </td>
+          </tr>
+        ) : null
+      ) }
+      <tr className="bold">
+        <td>Available Cash Total</td>
+        <td className="right">₹{ availableCash.toFixed( 2 ) }</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div className="line" />
+  <div className="flex justify-between bold">
+    <span>Closed By</span>
+    <span>{ closedBy || "-" }</span>
+  </div>
+</Card>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
       { !isReadOnly && (
-        <Button onClick={ handleSubmit } disabled={ isSubmitting } className="w-full">
-          { isSubmitting ? "Submitting..." : "Submit Day" }
+        <Button onClick={ handleSubmit } className="w-full">
+          Submit Day
         </Button>
       ) }
+
+      <Button variant="outline" className="w-full" onClick={ handlePrint }>
+        <Printer className="w-4 h-4 mr-2" />
+        Print Cash Summary
+      </Button>
+
     </div>
   )
 }

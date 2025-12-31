@@ -4,145 +4,228 @@ import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { addPayment, deletePayment, updatePayment } from "@/app/actions/counter"
+import
+{
+  addPayment,
+  deletePayment,
+  updatePayment,
+} from "@/app/actions/counter"
 import type { DayEntry } from "@/lib/types"
-import { calculateTotalPayments } from "@/lib/types"
 import { Plus, Trash2, Pencil, Check, X } from "lucide-react"
 
-interface PaymentsPageProps {
+interface PaymentsPageProps
+{
   entry: DayEntry
   refreshEntry: () => Promise<void>
   isReadOnly: boolean
 }
 
-export default function PaymentsPage({ entry, refreshEntry, isReadOnly }: PaymentsPageProps) {
-  const [paymentDesc, setPaymentDesc] = useState("")
-  const [paymentAmount, setPaymentAmount] = useState("")
-  const [editingIndex, setEditingIndex] = useState<number | null>(null)
-  const [editDesc, setEditDesc] = useState("")
-  const [editAmount, setEditAmount] = useState("")
+export default function PaymentsPage ( {
+  entry,
+  refreshEntry,
+  isReadOnly,
+}: PaymentsPageProps )
+{
 
-  const handleAddPayment = async () => {
-    const amount = Number.parseFloat(paymentAmount)
-    if (!paymentDesc || isNaN(amount) || amount <= 0) return
+  const [ desc, setDesc ] = useState( "" )
+  const [ amount, setAmount ] = useState( "" )
+  const [ type, setType ] = useState<"IN" | "OUT">( "OUT" )
 
-    await addPayment(paymentDesc, amount)
+  const [ editingIndex, setEditingIndex ] = useState<number | null>( null )
+  const [ editDesc, setEditDesc ] = useState( "" )
+  const [ editAmount, setEditAmount ] = useState( "" )
+  const [ editType, setEditType ] = useState<"IN" | "OUT">( "OUT" )
+
+  /* ---------- CALCULATIONS ---------- */
+  const totalOut = entry.payments
+    .filter( p => ( p.type ?? "OUT" ) === "OUT" )
+    .reduce( ( s, p ) => s + p.amount, 0 )
+
+  const totalIn = entry.payments
+    .filter( p => ( p.type ?? "OUT" ) === "IN" )
+    .reduce( ( s, p ) => s + p.amount, 0 )
+
+  const netMovement = totalIn - totalOut
+
+  /* ---------- ACTIONS ---------- */
+  const handleAdd = async () =>
+  {
+    const amt = Number( amount )
+    if ( !desc || isNaN( amt ) || amt <= 0 ) return
+
+    await addPayment( desc, amt, type )
     await refreshEntry()
-    setPaymentDesc("")
-    setPaymentAmount("")
+
+    setDesc( "" )
+    setAmount( "" )
+    setType( "OUT" )
   }
 
-  const handleDeletePayment = async (index: number) => {
-    if (confirm("Delete this payment?")) {
-      await deletePayment(index)
+  const handleDelete = async ( index: number ) =>
+  {
+    if ( confirm( "Delete this entry?" ) )
+    {
+      await deletePayment( index )
       await refreshEntry()
     }
   }
 
-  const startEdit = (index: number) => {
-    setEditingIndex(index)
-    setEditDesc(entry.payments[index].description)
-    setEditAmount(entry.payments[index].amount.toString())
+  const startEdit = ( index: number ) =>
+  {
+    const p = entry.payments[ index ]
+    setEditingIndex( index )
+    setEditDesc( p.description )
+    setEditAmount( p.amount.toString() )
+    setEditType( p.type ?? "OUT" )
   }
 
-  const saveEdit = async () => {
-    if (editingIndex === null) return
-    const amount = Number.parseFloat(editAmount)
-    if (!editDesc || isNaN(amount) || amount <= 0) return
+  const saveEdit = async () =>
+  {
+    if ( editingIndex === null ) return
+    const amt = Number( editAmount )
+    if ( !editDesc || isNaN( amt ) || amt <= 0 ) return
 
-    await updatePayment(editingIndex, editDesc, amount)
+    await updatePayment( editingIndex, editDesc, amt, editType )
     await refreshEntry()
-    setEditingIndex(null)
+    setEditingIndex( null )
   }
-
-  const cancelEdit = () => {
-    setEditingIndex(null)
-  }
-
-  const totalPayments = calculateTotalPayments(entry.payments)
 
   return (
     <div className="space-y-6">
       <Card className="p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">Payments (Money Going Out)</h2>
-          <div className="text-sm text-muted-foreground">Opening: ₹{entry.openingCash.toFixed(2)}</div>
-        </div>
+        <h2 className="text-xl font-bold mb-4">
+          Cash Movements (IN / OUT)
+        </h2>
 
-        {!isReadOnly && (
+        {/* ADD FORM */ }
+        { !isReadOnly && (
           <div className="flex gap-3 mb-4">
+            <select
+              value={ type }
+              onChange={ ( e ) => setType( e.target.value as "IN" | "OUT" ) }
+              className="border rounded px-2"
+            >
+              <option value="OUT">Money Out</option>
+              <option value="IN">Money In</option>
+            </select>
+
             <Input
-              placeholder="Description (e.g., Tea, Auto)"
-              value={paymentDesc}
-              onChange={(e) => setPaymentDesc(e.target.value)}
+              placeholder="Description"
+              value={ desc }
+              onChange={ ( e ) => setDesc( e.target.value ) }
               className="flex-1"
             />
+
             <Input
               type="number"
               placeholder="Amount"
-              value={paymentAmount}
-              onChange={(e) => setPaymentAmount(e.target.value)}
+              value={ amount }
+              onChange={ ( e ) => setAmount( e.target.value ) }
               className="w-32"
             />
-            <Button onClick={handleAddPayment}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add
+
+            <Button onClick={ handleAdd }>
+              <Plus className="w-4 h-4 mr-1" /> Add
             </Button>
           </div>
-        )}
+        ) }
 
+        {/* LIST */ }
         <div className="space-y-2">
-          {entry.payments.length === 0 ? (
-            <p className="text-center text-muted-foreground py-4">No payments yet</p>
-          ) : (
-            entry.payments.map((payment, index) => (
-              <div key={index} className="flex items-center gap-3 p-3 bg-secondary rounded-lg">
-                {editingIndex === index ? (
+          { entry.payments.map( ( p, i ) =>
+          {
+            const effectiveType = p.type ?? "OUT"
+            return (
+              <div
+                key={ i }
+                className={ `flex items-center gap-3 p-3 rounded-lg ${ effectiveType === "IN" ? "bg-green-50" : "bg-red-50"
+                  }` }
+              >
+                { editingIndex === i ? (
                   <>
-                    <Input value={editDesc} onChange={(e) => setEditDesc(e.target.value)} className="flex-1" />
+                    <select
+                      value={ editType }
+                      onChange={ ( e ) => setEditType( e.target.value as any ) }
+                      className="border rounded px-2"
+                    >
+                      <option value="OUT">OUT</option>
+                      <option value="IN">IN</option>
+                    </select>
+
+                    <Input
+                      value={ editDesc }
+                      onChange={ ( e ) => setEditDesc( e.target.value ) }
+                      className="flex-1"
+                    />
+
                     <Input
                       type="number"
-                      value={editAmount}
-                      onChange={(e) => setEditAmount(e.target.value)}
+                      value={ editAmount }
+                      onChange={ ( e ) => setEditAmount( e.target.value ) }
                       className="w-32"
                     />
-                    <Button size="sm" onClick={saveEdit} variant="default">
+
+                    <Button size="sm" onClick={ saveEdit }>
                       <Check className="w-4 h-4" />
                     </Button>
-                    <Button size="sm" onClick={cancelEdit} variant="outline">
+
+                    <Button size="sm" variant="outline" onClick={ () => setEditingIndex( null ) }>
                       <X className="w-4 h-4" />
                     </Button>
                   </>
                 ) : (
                   <>
                     <div className="flex-1">
-                      <div className="font-medium">{payment.description}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {new Date(payment.time).toLocaleTimeString("en-IN")}
+                      <div className="font-medium">
+                        { effectiveType === "IN" ? "➕" : "➖" } { p.description }
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        { new Date( p.time ).toLocaleTimeString( "en-IN" ) }
                       </div>
                     </div>
-                    <div className="text-lg font-bold">₹{payment.amount.toFixed(2)}</div>
-                    {!isReadOnly && (
+
+                    <div className="font-bold">
+                      ₹{ p.amount.toFixed( 2 ) }
+                    </div>
+
+                    { !isReadOnly && (
                       <>
-                        <Button variant="outline" size="sm" onClick={() => startEdit(index)}>
+                        <Button size="sm" variant="outline" onClick={ () => startEdit( i ) }>
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        <Button variant="destructive" size="sm" onClick={() => handleDeletePayment(index)}>
+                        <Button size="sm" variant="destructive" onClick={ () => handleDelete( i ) }>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </>
-                    )}
+                    ) }
                   </>
-                )}
+                ) }
               </div>
-            ))
-          )}
+            )
+          } ) }
         </div>
 
-        <div className="bg-primary/10 p-4 rounded-lg mt-4">
-          <div className="flex justify-between items-center">
-            <span className="font-medium">Total Payments:</span>
-            <span className="text-2xl font-bold text-primary">₹{totalPayments.toFixed(2)}</span>
+        {/* TOTALS */ }
+        <div className="grid grid-cols-3 gap-4 mt-6 text-center">
+          <div className="p-3 bg-green-100 rounded">
+            <div className="text-sm">Money In</div>
+            <div className="text-xl font-bold text-green-700">
+              ₹{ totalIn.toFixed( 2 ) }
+            </div>
+          </div>
+
+          <div className="p-3 bg-red-100 rounded">
+            <div className="text-sm">Money Out</div>
+            <div className="text-xl font-bold text-red-700">
+              ₹{ totalOut.toFixed( 2 ) }
+            </div>
+          </div>
+
+          <div className="p-3 bg-primary/10 rounded">
+            <div className="text-sm">Net Effect</div>
+            <div className="text-xl font-bold">
+              ₹{ netMovement.toFixed( 2 ) }
+            </div>
           </div>
         </div>
       </Card>

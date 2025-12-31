@@ -1,13 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { updateSales } from "@/app/actions/counter"
+import { updateSales, getOpeningCashForDate } from "@/app/actions/counter"
 import type { DayEntry, SalesData } from "@/lib/types"
 import type { User } from "@/lib/auth"
-import { calculateCashSales, calculateTotalPayments } from "@/lib/types"
+import { calculateCashSales, calculatePaymentSummary } from "@/lib/types"
 import { AlertCircle } from "lucide-react"
 
 interface SalesPageProps {
@@ -17,196 +17,231 @@ interface SalesPageProps {
   user: User
 }
 
-export default function SalesPage({ entry, refreshEntry, isReadOnly, user }: SalesPageProps) {
-  const [sales, setSales] = useState<SalesData>(entry.sales)
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+export default function SalesPage({
+  entry,
+  refreshEntry,
+  isReadOnly,
+  user,
+}: SalesPageProps) {
+
   const isFashionBoth = user.counterName === "Smart Fashion (Both)"
 
-  const handleUpdateSales = async () => {
+  /* ================= STATE ================= */
+
+  // numeric state (saved)
+  const [sales, setSales] = useState<SalesData>(entry.sales)
+
+  // string state (for typing – fixes cursor issue)
+  const [inputs, setInputs] = useState<Record<string, string>>({})
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+
+  // ✅ opening cash (previous day – source of truth)
+  const [openingCash, setOpeningCash] = useState(0)
+
+  /* ================= OPENING CASH FETCH ================= */
+
+  useEffect(() => {
+    getOpeningCashForDate(entry.date).then(res => {
+      if (!res?.error) {
+        setOpeningCash(res.cash)
+      }
+    })
+  }, [entry.date, entry.updatedAt]) // ✅ IMPORTANT FIX
+
+  /* ================= HANDLERS ================= */
+
+  const handleChange = (key: keyof SalesData, value: string) => {
+    setInputs({ ...inputs, [key]: value })
+    setSales({
+      ...sales,
+      [key]: value === "" ? 0 : Number(value),
+    })
+    setHasUnsavedChanges(true)
+  }
+
+  const handleSave = async () => {
     await updateSales(sales)
     setHasUnsavedChanges(false)
     await refreshEntry()
   }
 
+  /* ================= CALCULATIONS ================= */
+
   const previewCashSales = calculateCashSales(sales, isFashionBoth)
-
   const savedCashSales = calculateCashSales(entry.sales, isFashionBoth)
-  const totalPayments = calculateTotalPayments(entry.payments)
-
-  const handleSalesChange = (updates: Partial<SalesData>) => {
-    setSales({ ...sales, ...updates })
-    setHasUnsavedChanges(true)
-  }
+  const { totalIn, totalOut } = calculatePaymentSummary(entry.payments)
 
   return (
     <div className="space-y-6">
+
+      {/* UNSAVED WARNING */}
       {hasUnsavedChanges && (
-        <Card className="p-4 border-orange-500 bg-orange-50 dark:bg-orange-950">
-          <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
+        <Card className="p-4 border-orange-500 bg-orange-50">
+          <div className="flex items-center gap-2 text-orange-700">
             <AlertCircle className="w-5 h-5" />
-            <span className="font-medium">You have unsaved changes. Click "Save Sales" to update.</span>
+            <span className="font-medium">
+              You have unsaved changes. Click “Save Sales”.
+            </span>
           </div>
         </Card>
       )}
 
+      {/* SALES ENTRY */}
       <Card className="p-6">
         <h2 className="text-xl font-bold mb-4">Sales Entry (End of Day)</h2>
 
         {!isFashionBoth ? (
           <div className="space-y-4">
+
             <div>
-              <label className="text-sm font-medium block mb-2">Total Sales</label>
+              <label className="text-sm font-medium mb-1 block">Total Sales</label>
               <Input
                 type="number"
-                value={sales.totalSales}
-                onChange={(e) => handleSalesChange({ totalSales: Number.parseFloat(e.target.value) || 0 })}
+                value={inputs.totalSales ?? sales.totalSales.toString()}
+                onChange={e => handleChange("totalSales", e.target.value)}
                 disabled={isReadOnly}
-                placeholder="0.00"
               />
             </div>
+
             <div>
-              <label className="text-sm font-medium block mb-2">Card / UPI Sales</label>
+              <label className="text-sm font-medium mb-1 block">Card / UPI</label>
               <Input
                 type="number"
-                value={sales.cardUpiSales}
-                onChange={(e) => handleSalesChange({ cardUpiSales: Number.parseFloat(e.target.value) || 0 })}
+                value={inputs.cardUpiSales ?? sales.cardUpiSales.toString()}
+                onChange={e => handleChange("cardUpiSales", e.target.value)}
                 disabled={isReadOnly}
-                placeholder="0.00"
               />
             </div>
+
             <div>
-              <label className="text-sm font-medium block mb-2">Credit Sales</label>
+              <label className="text-sm font-medium mb-1 block">Credit Sales</label>
               <Input
                 type="number"
-                value={sales.creditSales}
-                onChange={(e) => handleSalesChange({ creditSales: Number.parseFloat(e.target.value) || 0 })}
+                value={inputs.creditSales ?? sales.creditSales.toString()}
+                onChange={e => handleChange("creditSales", e.target.value)}
                 disabled={isReadOnly}
-                placeholder="0.00"
               />
             </div>
+
             <div className="bg-secondary p-4 rounded-lg">
-              <div className="flex justify-between">
-                <span className="font-medium">Cash Sales (Preview):</span>
-                <span className="text-lg font-bold">₹{previewCashSales.toFixed(2)}</span>
+              <div className="flex justify-between font-bold">
+                <span>Cash Sales (Preview)</span>
+                <span>₹{previewCashSales.toFixed(2)}</span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Total - Card/UPI - Credit</p>
             </div>
+
           </div>
         ) : (
           <div className="space-y-6">
+
+            {/* SMART MART */}
             <div>
-              <h3 className="font-semibold mb-3 text-primary">Smart Mart</h3>
+              <h3 className="font-semibold mb-3">Smart Mart</h3>
               <div className="space-y-3">
-                <div>
-                  <label className="text-sm font-medium block mb-2">Total Sales</label>
-                  <Input
-                    type="number"
-                    value={sales.martTotalSales || 0}
-                    onChange={(e) => handleSalesChange({ martTotalSales: Number.parseFloat(e.target.value) || 0 })}
-                    disabled={isReadOnly}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium block mb-2">Card / UPI</label>
-                  <Input
-                    type="number"
-                    value={sales.martCardUpi || 0}
-                    onChange={(e) => handleSalesChange({ martCardUpi: Number.parseFloat(e.target.value) || 0 })}
-                    disabled={isReadOnly}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium block mb-2">Credit</label>
-                  <Input
-                    type="number"
-                    value={sales.martCredit || 0}
-                    onChange={(e) => handleSalesChange({ martCredit: Number.parseFloat(e.target.value) || 0 })}
-                    disabled={isReadOnly}
-                  />
-                </div>
+                <Input
+                  type="number"
+                  placeholder="Total Sales"
+                  value={inputs.martTotalSales ?? (sales.martTotalSales ?? 0).toString()}
+                  onChange={e => handleChange("martTotalSales", e.target.value)}
+                  disabled={isReadOnly}
+                />
+                <Input
+                  type="number"
+                  placeholder="Card / UPI"
+                  value={inputs.martCardUpi ?? (sales.martCardUpi ?? 0).toString()}
+                  onChange={e => handleChange("martCardUpi", e.target.value)}
+                  disabled={isReadOnly}
+                />
+                <Input
+                  type="number"
+                  placeholder="Credit"
+                  value={inputs.martCredit ?? (sales.martCredit ?? 0).toString()}
+                  onChange={e => handleChange("martCredit", e.target.value)}
+                  disabled={isReadOnly}
+                />
               </div>
             </div>
 
+            {/* SMART FASHION */}
             <div>
-              <h3 className="font-semibold mb-3 text-accent">Smart Fashion</h3>
+              <h3 className="font-semibold mb-3">Smart Fashion</h3>
               <div className="space-y-3">
-                <div>
-                  <label className="text-sm font-medium block mb-2">Total Sales</label>
-                  <Input
-                    type="number"
-                    value={sales.fashionTotalSales || 0}
-                    onChange={(e) => handleSalesChange({ fashionTotalSales: Number.parseFloat(e.target.value) || 0 })}
-                    disabled={isReadOnly}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium block mb-2">Card / UPI</label>
-                  <Input
-                    type="number"
-                    value={sales.fashionCardUpi || 0}
-                    onChange={(e) => handleSalesChange({ fashionCardUpi: Number.parseFloat(e.target.value) || 0 })}
-                    disabled={isReadOnly}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium block mb-2">Credit</label>
-                  <Input
-                    type="number"
-                    value={sales.fashionCredit || 0}
-                    onChange={(e) => handleSalesChange({ fashionCredit: Number.parseFloat(e.target.value) || 0 })}
-                    disabled={isReadOnly}
-                  />
-                </div>
+                <Input
+                  type="number"
+                  placeholder="Total Sales"
+                  value={inputs.fashionTotalSales ?? (sales.fashionTotalSales ?? 0).toString()}
+                  onChange={e => handleChange("fashionTotalSales", e.target.value)}
+                  disabled={isReadOnly}
+                />
+                <Input
+                  type="number"
+                  placeholder="Card / UPI"
+                  value={inputs.fashionCardUpi ?? (sales.fashionCardUpi ?? 0).toString()}
+                  onChange={e => handleChange("fashionCardUpi", e.target.value)}
+                  disabled={isReadOnly}
+                />
+                <Input
+                  type="number"
+                  placeholder="Credit"
+                  value={inputs.fashionCredit ?? (sales.fashionCredit ?? 0).toString()}
+                  onChange={e => handleChange("fashionCredit", e.target.value)}
+                  disabled={isReadOnly}
+                />
               </div>
             </div>
 
             <div className="bg-secondary p-4 rounded-lg">
-              <div className="flex justify-between">
-                <span className="font-medium">Total Cash Sales (Preview):</span>
-                <span className="text-lg font-bold">₹{previewCashSales.toFixed(2)}</span>
+              <div className="flex justify-between font-bold">
+                <span>Total Cash Sales</span>
+                <span>₹{previewCashSales.toFixed(2)}</span>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Mart + Fashion Cash</p>
             </div>
+
           </div>
         )}
 
         {!isReadOnly && (
-          <Button onClick={handleUpdateSales} className="w-full mt-4" disabled={!hasUnsavedChanges}>
+          <Button
+            onClick={handleSave}
+            disabled={!hasUnsavedChanges}
+            className="w-full mt-4"
+          >
             {hasUnsavedChanges ? "Save Sales" : "Saved ✓"}
           </Button>
         )}
       </Card>
 
+      {/* EXPECTED CASH SUMMARY */}
       <Card className="p-6">
-        <h3 className="font-semibold mb-4">Expected Cash Summary (Saved)</h3>
+        <h3 className="font-semibold mb-4">Expected Cash (Saved)</h3>
+
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
-            <span>Opening Cash:</span>
-            <span>₹{entry.openingCash.toFixed(2)}</span>
+            <span>Opening Cash</span>
+            <span>₹{openingCash.toFixed(2)}</span>
           </div>
           <div className="flex justify-between text-green-600">
-            <span>+ Cash Sales:</span>
+            <span>+ Cash Sales</span>
             <span>₹{savedCashSales.toFixed(2)}</span>
           </div>
-          <div className="flex justify-between text-red-600">
-            <span>- Payments:</span>
-            <span>₹{totalPayments.toFixed(2)}</span>
+          <div className="flex justify-between text-green-600">
+            <span>+ Money In</span>
+            <span>₹{totalIn.toFixed(2)}</span>
           </div>
-          <div className="border-t border-border pt-2">
-            <div className="flex justify-between items-center font-bold">
-              <span>Expected Cash:</span>
-              <span className="text-xl text-primary">
-                ₹{(entry.openingCash + savedCashSales - totalPayments).toFixed(2)}
-              </span>
-            </div>
+          <div className="flex justify-between text-red-600">
+            <span>- Money Out</span>
+            <span>₹{totalOut.toFixed(2)}</span>
+          </div>
+
+          <div className="border-t pt-2 flex justify-between font-bold">
+            <span>Expected Cash</span>
+            <span className="text-primary text-lg">
+              ₹{(openingCash + savedCashSales + totalIn - totalOut).toFixed(2)}
+            </span>
           </div>
         </div>
-        {hasUnsavedChanges && (
-          <p className="text-xs text-muted-foreground mt-2 italic">
-            This shows your last saved values. Save sales to update expected cash.
-          </p>
-        )}
       </Card>
+
     </div>
   )
 }

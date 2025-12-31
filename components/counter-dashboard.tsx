@@ -4,107 +4,215 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { logout } from "@/app/actions/auth"
-import { getEntryByDate } from "@/app/actions/counter"
+import
+  {
+    getEntryByDate,
+    verifyOpeningCash,
+  } from "@/app/actions/counter"
 import type { User } from "@/lib/auth"
 import type { DayEntry } from "@/lib/types"
-import { LogOut, CheckCircle, Calendar } from "lucide-react"
+import { LogOut, CheckCircle, Calendar, AlertCircle } from "lucide-react"
+
+import OpeningVerifyPage from "./pages/opening-verify-page"
 import PaymentsPage from "./pages/payments-page"
 import SalesPage from "./pages/sales-page"
 import ClosingPage from "./pages/closing-page"
 
-interface CounterDashboardProps {
+interface CounterDashboardProps
+{
   user: User
   initialEntry: DayEntry | null
 }
 
-export default function CounterDashboard({ user, initialEntry }: CounterDashboardProps) {
-  const [entry, setEntry] = useState<DayEntry | null>(initialEntry)
-  const [currentPage, setCurrentPage] = useState<"payments" | "sales" | "closing">("payments")
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0])
+export default function CounterDashboard ( {
+  user,
+  initialEntry,
+}: CounterDashboardProps )
+{
+  const today = new Date().toISOString().split( "T" )[ 0 ]
 
-  const refreshEntry = async () => {
-    const updated = await getEntryByDate(selectedDate)
-    setEntry(updated)
+  const [ entry, setEntry ] = useState<DayEntry | null>( initialEntry )
+  const [ currentPage, setCurrentPage ] = useState<
+    "payments" | "sales" | "closing"
+  >( "payments" )
+  const [ selectedDate, setSelectedDate ] = useState( today )
+  const [ verifyingOpening, setVerifyingOpening ] = useState( false )
+  const [ loading, setLoading ] = useState( false )
+
+  /* ================= DATA ================= */
+
+  const refreshEntry = async () =>
+  {
+    setLoading( true )
+    const updated = await getEntryByDate( selectedDate )
+    setEntry( updated )
+    setLoading( false )
   }
 
-  const handleDateChange = async (date: string) => {
-    setSelectedDate(date)
-    const updated = await getEntryByDate(date)
-    setEntry(updated)
+  const handleDateChange = async ( date: string ) =>
+  {
+    setSelectedDate( date )
+    setLoading( true )
+    const updated = await getEntryByDate( date )
+    setEntry( updated )
+    setLoading( false )
   }
 
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      const updated = await getEntryByDate(selectedDate)
-      setEntry(updated)
-    }, 30000) // Refresh every 30 seconds
+  /* ================= OPENING VERIFY ================= */
 
-    return () => clearInterval(interval)
-  }, [selectedDate])
+  const handleVerifyOpening = async () =>
+  {
+    if ( !entry ) return
+    setVerifyingOpening( true )
+    await verifyOpeningCash( selectedDate )
+    await refreshEntry()
+    setVerifyingOpening( false )
+  }
 
-  if (!entry) return <div>Loading...</div>
+  /* ================= AUTO REFRESH ================= */
+
+  useEffect( () =>
+  {
+    const interval = setInterval( async () =>
+    {
+      const updated = await getEntryByDate( selectedDate )
+      setEntry( updated )
+    }, 30000 )
+    return () => clearInterval( interval )
+  }, [ selectedDate ] )
+
+  /* ================= EMPTY DATE STATE (FIX) ================= */
+
+  if ( !loading && !entry )
+  {
+    return (
+      <div className="flex h-[70vh] items-center justify-center">
+        <div className="max-w-md text-center space-y-4">
+          <AlertCircle className="mx-auto h-10 w-10 text-muted-foreground" />
+
+          <h2 className="text-lg font-semibold">
+            No entry found for this date
+          </h2>
+
+          <p className="text-sm text-muted-foreground">
+            There was no counter activity recorded on the selected date.
+          </p>
+
+          <Button
+            variant="outline"
+            onClick={ () =>
+            {
+              setSelectedDate( today )
+              setEntry( initialEntry )
+            } }
+          >
+            Go back to today
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  /* ================= LOADING ================= */
+
+  if ( loading )
+  {
+    return (
+      <div className="flex h-[70vh] items-center justify-center text-sm text-muted-foreground">
+        Loading…
+      </div>
+    )
+  }
+
+  if ( !entry ) return null
 
   const isReadOnly = entry.status !== "open"
 
   return (
     <div className="min-h-screen bg-background">
+      {/* ================= HEADER ================= */ }
       <header className="bg-card border-b border-border sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">{user.counterName}</h1>
+            <h1 className="text-2xl font-bold text-foreground">
+              { user.counterName }
+            </h1>
             <p className="text-sm text-muted-foreground">
-              {new Date(selectedDate).toLocaleDateString("en-IN", {
+              { new Date( selectedDate ).toLocaleDateString( "en-IN", {
                 weekday: "long",
                 year: "numeric",
                 month: "long",
                 day: "numeric",
-              })}
+              } ) }
             </p>
           </div>
+
           <div className="flex items-center gap-4">
+            {/* DATE PICKER */ }
             <div className="flex items-center gap-2">
               <Calendar className="w-5 h-5 text-muted-foreground" />
-              <Input type="date" value={selectedDate} onChange={(e) => handleDateChange(e.target.value)} />
+              <Input
+                type="date"
+                value={ selectedDate }
+                max={ today }
+                onChange={ ( e ) => handleDateChange( e.target.value ) }
+              />
             </div>
-            {entry.status === "submitted" && (
+
+            {/* STATUS BADGES */ }
+            { entry.openingVerified && (
+              <div className="flex items-center gap-2 text-green-600">
+                <CheckCircle className="w-5 h-5" />
+                <span className="text-sm font-medium">
+                  Opening Verified
+                </span>
+              </div>
+            ) }
+
+            { entry.status === "submitted" && (
               <div className="flex items-center gap-2 text-accent">
                 <CheckCircle className="w-5 h-5" />
-                <span className="font-medium">Awaiting Admin Confirmation</span>
+                <span className="font-medium">
+                  Awaiting Admin Confirmation
+                </span>
               </div>
-            )}
-            {entry.status === "confirmed" && (
+            ) }
+
+            { entry.status === "confirmed" && (
               <div className="flex items-center gap-2 text-green-600">
                 <CheckCircle className="w-5 h-5" />
                 <span className="font-medium">Confirmed</span>
               </div>
-            )}
-            <Button onClick={() => logout()} variant="outline" size="sm">
+            ) }
+
+            <Button onClick={ () => logout() } variant="outline" size="sm">
               <LogOut className="w-4 h-4 mr-2" />
               Logout
             </Button>
           </div>
         </div>
 
+        {/* ================= PAGE NAV ================= */ }
         <div className="flex gap-2 px-4 pb-2">
           <Button
-            variant={currentPage === "payments" ? "default" : "outline"}
-            onClick={() => setCurrentPage("payments")}
+            variant={ currentPage === "payments" ? "default" : "outline" }
+            onClick={ () => setCurrentPage( "payments" ) }
             className="flex-1"
             size="sm"
           >
             1. Payments
           </Button>
           <Button
-            variant={currentPage === "sales" ? "default" : "outline"}
-            onClick={() => setCurrentPage("sales")}
+            variant={ currentPage === "sales" ? "default" : "outline" }
+            onClick={ () => setCurrentPage( "sales" ) }
             className="flex-1"
             size="sm"
           >
             2. Sales
           </Button>
           <Button
-            variant={currentPage === "closing" ? "default" : "outline"}
-            onClick={() => setCurrentPage("closing")}
+            variant={ currentPage === "closing" ? "default" : "outline" }
+            onClick={ () => setCurrentPage( "closing" ) }
             className="flex-1"
             size="sm"
           >
@@ -113,16 +221,46 @@ export default function CounterDashboard({ user, initialEntry }: CounterDashboar
         </div>
       </header>
 
+      {/* ================= MAIN ================= */ }
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {currentPage === "payments" && (
-          <PaymentsPage entry={entry} refreshEntry={refreshEntry} isReadOnly={isReadOnly} />
-        )}
-        {currentPage === "sales" && (
-          <SalesPage entry={entry} refreshEntry={refreshEntry} isReadOnly={isReadOnly} user={user} />
-        )}
-        {currentPage === "closing" && (
-          <ClosingPage entry={entry} refreshEntry={refreshEntry} isReadOnly={isReadOnly} user={user} />
-        )}
+        {/* ===== STEP 0: OPENING VERIFY ===== */ }
+        { entry.status === "open" &&
+          !entry.openingVerified &&
+          entry.openingDenominations && (
+            <OpeningVerifyPage
+              entry={ entry }
+              isReadOnly={ isReadOnly }
+              onVerify={ handleVerifyOpening }
+              verifying={ verifyingOpening }
+            />
+          ) }
+
+        {/* ===== STEP 1–3 ===== */ }
+        { currentPage === "payments" && (
+          <PaymentsPage
+            entry={ entry }
+            refreshEntry={ refreshEntry }
+            isReadOnly={ isReadOnly }
+          />
+        ) }
+
+        { currentPage === "sales" && (
+          <SalesPage
+            entry={ entry }
+            refreshEntry={ refreshEntry }
+            isReadOnly={ isReadOnly }
+            user={ user }
+          />
+        ) }
+
+        { currentPage === "closing" && (
+          <ClosingPage
+            entry={ entry }
+            refreshEntry={ refreshEntry }
+            isReadOnly={ isReadOnly }
+            user={ user }
+          />
+        ) }
       </main>
     </div>
   )

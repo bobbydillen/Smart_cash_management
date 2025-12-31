@@ -6,61 +6,105 @@ import type { DayEntry, DenominationCount } from "@/lib/types"
 import { redirect } from "next/navigation"
 import { ObjectId } from "mongodb"
 
-function serializeEntry(entry: any): DayEntry {
+/* =====================================================
+   SERIALIZER
+   ===================================================== */
+
+function serializeEntry ( entry: any ): DayEntry
+{
   return {
     ...entry,
     _id: entry._id?.toString(),
-    date: typeof entry.date === "string" ? entry.date : entry.date?.toISOString?.() || entry.date,
-    createdAt: entry.createdAt instanceof Date ? entry.createdAt.toISOString() : entry.createdAt,
-    updatedAt: entry.updatedAt instanceof Date ? entry.updatedAt.toISOString() : entry.updatedAt,
-    submittedAt: entry.submittedAt instanceof Date ? entry.submittedAt.toISOString() : entry.submittedAt,
-    confirmedAt: entry.confirmedAt instanceof Date ? entry.confirmedAt.toISOString() : entry.confirmedAt,
+    date:
+      typeof entry.date === "string"
+        ? entry.date
+        : entry.date?.toISOString?.() || entry.date,
+    createdAt:
+      entry.createdAt instanceof Date
+        ? entry.createdAt.toISOString()
+        : entry.createdAt,
+    updatedAt:
+      entry.updatedAt instanceof Date
+        ? entry.updatedAt.toISOString()
+        : entry.updatedAt,
+    submittedAt:
+      entry.submittedAt instanceof Date
+        ? entry.submittedAt.toISOString()
+        : entry.submittedAt,
+    confirmedAt:
+      entry.confirmedAt instanceof Date
+        ? entry.confirmedAt.toISOString()
+        : entry.confirmedAt,
     payments:
-      entry.payments?.map((p: any) => ({
+      entry.payments?.map( ( p: any ) => ( {
         ...p,
         time: p.time instanceof Date ? p.time.toISOString() : p.time,
-      })) || [],
+      } ) ) || [],
   }
 }
 
-export async function getAllEntries(date?: string): Promise<DayEntry[]> {
+/* =====================================================
+   GET ALL ENTRIES (ADMIN)
+   ===================================================== */
+
+export async function getAllEntries ( date?: string ): Promise<DayEntry[]>
+{
   const user = await getSession()
-  if (!user || user.role !== "admin") {
-    redirect("/")
-  }
-
-  const db = await getDatabase()
-  const targetDate = date || new Date().toISOString().split("T")[0]
-
-  const entries = await db.collection<DayEntry>("entries").find({ date: targetDate }).sort({ counterName: 1 }).toArray()
-
-  return entries.map(serializeEntry)
-}
-
-export async function getEntryById(id: string): Promise<DayEntry | null> {
-  const user = await getSession()
-  if (!user || user.role !== "admin") {
-    redirect("/")
+  if ( !user || user.role !== "admin" )
+  {
+    redirect( "/" )
   }
 
   const db = await getDatabase()
-  const entry = await db.collection<DayEntry>("entries").findOne({ _id: new ObjectId(id) })
+  const targetDate = date || new Date().toISOString().split( "T" )[ 0 ]
 
-  if (!entry) return null
+  const entries = await db
+    .collection<DayEntry>( "entries" )
+    .find( { date: targetDate } )
+    .sort( { counterName: 1 } )
+    .toArray()
 
-  return serializeEntry(entry)
+  return entries.map( serializeEntry )
 }
 
-export async function confirmEntry(id: string) {
+/* =====================================================
+   GET ENTRY BY ID
+   ===================================================== */
+
+export async function getEntryById ( id: string ): Promise<DayEntry | null>
+{
   const user = await getSession()
-  if (!user || user.role !== "admin") {
+  if ( !user || user.role !== "admin" )
+  {
+    redirect( "/" )
+  }
+
+  const db = await getDatabase()
+  const entry = await db
+    .collection<DayEntry>( "entries" )
+    .findOne( { _id: new ObjectId( id ) } )
+
+  if ( !entry ) return null
+
+  return serializeEntry( entry )
+}
+
+/* =====================================================
+   CONFIRM ENTRY
+   ===================================================== */
+
+export async function confirmEntry ( id: string )
+{
+  const user = await getSession()
+  if ( !user || user.role !== "admin" )
+  {
     return { error: "Unauthorized" }
   }
 
   const db = await getDatabase()
 
-  await db.collection<DayEntry>("entries").updateOne(
-    { _id: new ObjectId(id) },
+  await db.collection<DayEntry>( "entries" ).updateOne(
+    { _id: new ObjectId( id ) },
     {
       $set: {
         status: "confirmed",
@@ -68,22 +112,28 @@ export async function confirmEntry(id: string) {
         confirmedBy: user.username,
         updatedAt: new Date(),
       },
-    },
+    }
   )
 
   return { success: true }
 }
 
-export async function unlockEntry(id: string) {
+/* =====================================================
+   UNLOCK ENTRY
+   ===================================================== */
+
+export async function unlockEntry ( id: string )
+{
   const user = await getSession()
-  if (!user || user.role !== "admin") {
+  if ( !user || user.role !== "admin" )
+  {
     return { error: "Unauthorized" }
   }
 
   const db = await getDatabase()
 
-  await db.collection<DayEntry>("entries").updateOne(
-    { _id: new ObjectId(id) },
+  await db.collection<DayEntry>( "entries" ).updateOne(
+    { _id: new ObjectId( id ) },
     {
       $set: {
         status: "open",
@@ -94,49 +144,84 @@ export async function unlockEntry(id: string) {
         confirmedAt: "",
         confirmedBy: "",
       },
-    },
+    }
   )
 
   return { success: true }
 }
 
-export async function updateEntryOpeningCash(id: string, openingCash: number) {
+/* =====================================================
+   ✅ UPDATE OPENING CASH (ADMIN — FINAL FIX)
+   ===================================================== */
+
+export async function updateEntryOpeningCash (
+  id: string,
+  openingCash: number,
+  openingDenominations: DenominationCount
+)
+{
   const user = await getSession()
-  if (!user || user.role !== "admin") {
+  if ( !user || user.role !== "admin" )
+  {
     return { error: "Unauthorized" }
+  }
+
+  if ( !id )
+  {
+    return { error: "Invalid entry id" }
   }
 
   const db = await getDatabase()
 
-  await db.collection<DayEntry>("entries").updateOne(
-    { _id: new ObjectId(id) },
+  await db.collection<DayEntry>( "entries" ).updateOne(
+    { _id: new ObjectId( id ) },
     {
       $set: {
         openingCash,
+        openingDenominations,
+
+        // 🔑 mark admin override explicitly
+        openingVerified: true,
+        openingVerifiedAt: new Date(),
+
         updatedAt: new Date(),
       },
-    },
+    }
   )
 
   return { success: true }
 }
 
-export async function updateEntryClosingCash(id: string, denominations: DenominationCount) {
+/* =====================================================
+   UPDATE CLOSING CASH (DENOMINATIONS)
+   ===================================================== */
+
+export async function updateEntryClosingCash (
+  id: string,
+  denominations: DenominationCount
+)
+{
   const user = await getSession()
-  if (!user || user.role !== "admin") {
+  if ( !user || user.role !== "admin" )
+  {
     return { error: "Unauthorized" }
+  }
+
+  if ( !id )
+  {
+    return { error: "Invalid entry id" }
   }
 
   const db = await getDatabase()
 
-  await db.collection<DayEntry>("entries").updateOne(
-    { _id: new ObjectId(id) },
+  await db.collection<DayEntry>( "entries" ).updateOne(
+    { _id: new ObjectId( id ) },
     {
       $set: {
         closingDenominations: denominations,
         updatedAt: new Date(),
       },
-    },
+    }
   )
 
   return { success: true }
