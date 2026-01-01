@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,13 +10,13 @@ import
   deletePayment,
   updatePayment,
 } from "@/app/actions/counter"
-import type { DayEntry } from "@/lib/types"
+import type { DayEntry, Payment } from "@/lib/types"
 import { Plus, Trash2, Pencil, Check, X } from "lucide-react"
 
 interface PaymentsPageProps
 {
   entry: DayEntry
-  refreshEntry: () => Promise<void>
+  refreshEntry: () => Promise<void> // kept for parent, NOT used here
   isReadOnly: boolean
 }
 
@@ -27,34 +27,67 @@ export default function PaymentsPage ( {
 }: PaymentsPageProps )
 {
 
+  /* ================= LOCAL PAYMENTS STATE ================= */
+
+  const [ payments, setPayments ] = useState<Payment[]>( entry.payments )
+
+  // Sync ONLY when entry/date changes
+  useEffect( () =>
+  {
+    setPayments( entry.payments )
+  }, [ entry.date, entry.payments ] )
+
+  /* ================= ADD FORM STATE ================= */
+
   const [ desc, setDesc ] = useState( "" )
   const [ amount, setAmount ] = useState( "" )
   const [ type, setType ] = useState<"IN" | "OUT">( "OUT" )
+
+  /* ================= EDIT STATE ================= */
 
   const [ editingIndex, setEditingIndex ] = useState<number | null>( null )
   const [ editDesc, setEditDesc ] = useState( "" )
   const [ editAmount, setEditAmount ] = useState( "" )
   const [ editType, setEditType ] = useState<"IN" | "OUT">( "OUT" )
 
-  /* ---------- CALCULATIONS ---------- */
-  const totalOut = entry.payments
+  /* ================= CALCULATIONS ================= */
+
+  const totalOut = payments
     .filter( p => ( p.type ?? "OUT" ) === "OUT" )
     .reduce( ( s, p ) => s + p.amount, 0 )
 
-  const totalIn = entry.payments
+  const totalIn = payments
     .filter( p => ( p.type ?? "OUT" ) === "IN" )
     .reduce( ( s, p ) => s + p.amount, 0 )
 
   const netMovement = totalIn - totalOut
 
-  /* ---------- ACTIONS ---------- */
+  /* ================= ACTIONS ================= */
+
   const handleAdd = async () =>
   {
     const amt = Number( amount )
     if ( !desc || isNaN( amt ) || amt <= 0 ) return
 
-    await addPayment( desc, amt, type )
-    await refreshEntry()
+    const newPayment: Payment = {
+      time: new Date().toISOString(),
+      description: desc,
+      amount: amt,
+      type,
+    }
+
+    // ✅ Optimistic UI
+    setPayments( prev => [ ...prev, newPayment ] )
+
+    try
+    {
+      await addPayment( desc, amt, type, entry.date )
+    } catch
+    {
+      // rollback on failure
+      setPayments( prev => prev.slice( 0, -1 ) )
+      return
+    }
 
     setDesc( "" )
     setAmount( "" )
@@ -63,16 +96,31 @@ export default function PaymentsPage ( {
 
   const handleDelete = async ( index: number ) =>
   {
-    if ( confirm( "Delete this entry?" ) )
+    if ( !confirm( "Delete this entry?" ) ) return
+
+    const removed = payments[ index ]
+
+    // optimistic remove
+    setPayments( prev => prev.filter( ( _, i ) => i !== index ) )
+
+    try
     {
-      await deletePayment( index )
-      await refreshEntry()
+      await deletePayment( index, entry.date )
+    } catch
+    {
+      // rollback
+      setPayments( prev =>
+      {
+        const copy = [ ...prev ]
+        copy.splice( index, 0, removed )
+        return copy
+      } )
     }
   }
 
   const startEdit = ( index: number ) =>
   {
-    const p = entry.payments[ index ]
+    const p = payments[ index ]
     setEditingIndex( index )
     setEditDesc( p.description )
     setEditAmount( p.amount.toString() )
@@ -82,13 +130,41 @@ export default function PaymentsPage ( {
   const saveEdit = async () =>
   {
     if ( editingIndex === null ) return
+
     const amt = Number( editAmount )
     if ( !editDesc || isNaN( amt ) || amt <= 0 ) return
 
-    await updatePayment( editingIndex, editDesc, amt, editType )
-    await refreshEntry()
+    const updated: Payment = {
+      ...payments[ editingIndex ],
+      description: editDesc,
+      amount: amt,
+      type: editType,
+    }
+
+    // optimistic update
+    setPayments( prev =>
+      prev.map( ( p, i ) => ( i === editingIndex ? updated : p ) )
+    )
+
+    try
+    {
+      await updatePayment(
+        editingIndex,
+        editDesc,
+        amt,
+        editType,
+        entry.date
+      )
+    } catch
+    {
+      // rollback
+      setPayments( entry.payments )
+    }
+
     setEditingIndex( null )
   }
+
+  /* ================= JSX ================= */
 
   return (
     <div className="space-y-6">
@@ -102,7 +178,7 @@ export default function PaymentsPage ( {
           <div className="flex gap-3 mb-4">
             <select
               value={ type }
-              onChange={ ( e ) => setType( e.target.value as "IN" | "OUT" ) }
+              onChange={ e => setType( e.target.value as "IN" | "OUT" ) }
               className="border rounded px-2"
             >
               <option value="OUT">Money Out</option>
@@ -112,7 +188,7 @@ export default function PaymentsPage ( {
             <Input
               placeholder="Description"
               value={ desc }
-              onChange={ ( e ) => setDesc( e.target.value ) }
+              onChange={ e => setDesc( e.target.value ) }
               className="flex-1"
             />
 
@@ -120,7 +196,7 @@ export default function PaymentsPage ( {
               type="number"
               placeholder="Amount"
               value={ amount }
-              onChange={ ( e ) => setAmount( e.target.value ) }
+              onChange={ e => setAmount( e.target.value ) }
               className="w-32"
             />
 
@@ -132,9 +208,10 @@ export default function PaymentsPage ( {
 
         {/* LIST */ }
         <div className="space-y-2">
-          { entry.payments.map( ( p, i ) =>
+          { payments.map( ( p, i ) =>
           {
             const effectiveType = p.type ?? "OUT"
+
             return (
               <div
                 key={ i }
@@ -145,7 +222,9 @@ export default function PaymentsPage ( {
                   <>
                     <select
                       value={ editType }
-                      onChange={ ( e ) => setEditType( e.target.value as any ) }
+                      onChange={ e =>
+                        setEditType( e.target.value as "IN" | "OUT" )
+                      }
                       className="border rounded px-2"
                     >
                       <option value="OUT">OUT</option>
@@ -154,14 +233,14 @@ export default function PaymentsPage ( {
 
                     <Input
                       value={ editDesc }
-                      onChange={ ( e ) => setEditDesc( e.target.value ) }
+                      onChange={ e => setEditDesc( e.target.value ) }
                       className="flex-1"
                     />
 
                     <Input
                       type="number"
                       value={ editAmount }
-                      onChange={ ( e ) => setEditAmount( e.target.value ) }
+                      onChange={ e => setEditAmount( e.target.value ) }
                       className="w-32"
                     />
 
@@ -169,7 +248,11 @@ export default function PaymentsPage ( {
                       <Check className="w-4 h-4" />
                     </Button>
 
-                    <Button size="sm" variant="outline" onClick={ () => setEditingIndex( null ) }>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={ () => setEditingIndex( null ) }
+                    >
                       <X className="w-4 h-4" />
                     </Button>
                   </>
@@ -177,7 +260,8 @@ export default function PaymentsPage ( {
                   <>
                     <div className="flex-1">
                       <div className="font-medium">
-                        { effectiveType === "IN" ? "➕" : "➖" } { p.description }
+                        { effectiveType === "IN" ? "➕" : "➖" }{ " " }
+                        { p.description }
                       </div>
                       <div className="text-xs text-muted-foreground">
                         { new Date( p.time ).toLocaleTimeString( "en-IN" ) }
@@ -190,10 +274,18 @@ export default function PaymentsPage ( {
 
                     { !isReadOnly && (
                       <>
-                        <Button size="sm" variant="outline" onClick={ () => startEdit( i ) }>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={ () => startEdit( i ) }
+                        >
                           <Pencil className="w-4 h-4" />
                         </Button>
-                        <Button size="sm" variant="destructive" onClick={ () => handleDelete( i ) }>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={ () => handleDelete( i ) }
+                        >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </>

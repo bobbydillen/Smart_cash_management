@@ -5,13 +5,15 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import type { DayEntry, DenominationCount } from "@/lib/types"
-import {
+import
+{
   calculateClosingCash,
   calculateCashSales,
   calculatePaymentSummary,
   calculateExpectedCashWithInOut,
 } from "@/lib/types"
-import {
+import
+{
   updateClosingCash,
   setNextDayOpening,
   submitDay,
@@ -48,6 +50,22 @@ const DENOMS = [
 ] as const
 
 /* ================= HELPERS ================= */
+// 👇 ADD HERE
+const CASH_KEYS = [
+  "notes500",
+  "notes200",
+  "notes100",
+  "notes50",
+  "notes20",
+  "notes10",
+] as const
+
+const COIN_KEYS = [
+  "coins10",
+  "coins5",
+  "coins2",
+  "coins1",
+] as const
 
 const cloneDenoms = ( d: DenominationCount ): DenominationCount => ( { ...d } )
 
@@ -57,10 +75,10 @@ const subtractDenoms = (
 ): DenominationCount =>
 {
   const r = { ...EMPTY_DENOMS }
-  ;( Object.keys( r ) as ( keyof DenominationCount )[] ).forEach( ( k ) =>
-  {
-    r[ k ] = Math.max( 0, closing[ k ] - ( nextDay[ k ] || 0 ) )
-  } )
+    ; ( Object.keys( r ) as ( keyof DenominationCount )[] ).forEach( ( k ) =>
+    {
+      r[ k ] = Math.max( 0, closing[ k ] - ( nextDay[ k ] || 0 ) )
+    } )
   return r
 }
 
@@ -100,12 +118,15 @@ export default function ClosingPage ( {
 
   const [ closedBy, setClosedBy ] = useState( entry.closedBy || "" )
   const [ openingCash, setOpeningCash ] = useState( 0 )
+  const [ hasUserEdited, setHasUserEdited ] = useState( false )
   const printRef = useRef<HTMLDivElement>( null )
 
   /* ================= SYNC ENTRY ================= */
 
   useEffect( () =>
   {
+    if ( hasUserEdited ) return   // 🔒 prevents reset
+
     setClosing( cloneDenoms( entry.closingDenominations ) )
     setNextDay(
       entry.nextDayOpeningDenominations
@@ -113,7 +134,9 @@ export default function ClosingPage ( {
         : cloneDenoms( EMPTY_DENOMS )
     )
     setClosedBy( entry.closedBy || "" )
-  }, [ entry ] )
+  }, [ entry.date ] )
+
+
 
   /* ================= OPENING CASH (SOURCE OF TRUTH) ================= */
 
@@ -153,7 +176,7 @@ export default function ClosingPage ( {
   const saveClosing = async () =>
   {
     await updateClosingCash( cloneDenoms( closing ), entry.date )
-    await refreshEntry()
+    // ❌ DO NOT refresh here
   }
 
   const saveNextDay = async () =>
@@ -163,8 +186,9 @@ export default function ClosingPage ( {
       cloneDenoms( nextDay ),
       entry.date
     )
-    await refreshEntry()
+    // ❌ DO NOT refresh here
   }
+
 
   const handleSubmit = async () =>
   {
@@ -206,7 +230,7 @@ export default function ClosingPage ( {
   return (
     <div className="space-y-4">
 
-      {/* CLOSED BY */}
+      {/* CLOSED BY */ }
       <Card className="p-3">
         <label className="text-sm font-semibold">Closed By</label>
         <Input
@@ -216,7 +240,7 @@ export default function ClosingPage ( {
         />
       </Card>
 
-      {/* CLOSING CASH */}
+      {/* CLOSING CASH */ }
       <Card className="p-4">
         <div className="flex justify-between items-center mb-2">
           <h3 className="font-bold">Closing Cash</h3>
@@ -229,7 +253,12 @@ export default function ClosingPage ( {
 
         <table className="w-full text-sm">
           <tbody>
-            { DENOMS.map( ( [ l, k, v ] ) => (
+
+            <tr className="font-bold bg-gray-100">
+              <td colSpan={ 3 }>CASH NOTES</td>
+            </tr>
+
+            { DENOMS.filter( d => CASH_KEYS.includes( d[ 1 ] as any ) ).map( ( [ l, k, v ] ) => (
               <tr key={ k }>
                 <td>{ l }</td>
                 <td>
@@ -238,11 +267,10 @@ export default function ClosingPage ( {
                     value={ closing[ k ] }
                     disabled={ isReadOnly }
                     onChange={ e =>
-                      setClosing( {
-                        ...closing,
-                        [ k ]: Number( e.target.value ) || 0,
-                      } )
-                    }
+                    {
+                      setHasUserEdited( true )
+                      setClosing( { ...closing, [ k ]: Number( e.target.value ) || 0 } )
+                    } }
                   />
                 </td>
                 <td className="text-right">
@@ -250,15 +278,44 @@ export default function ClosingPage ( {
                 </td>
               </tr>
             ) ) }
+
+            <tr className="font-bold bg-gray-100">
+              <td colSpan={ 3 }>COINS</td>
+            </tr>
+
+            { DENOMS.filter( d => COIN_KEYS.includes( d[ 1 ] as any ) ).map( ( [ l, k, v ] ) => (
+              <tr key={ k }>
+                <td>{ l }</td>
+                <td>
+                  <FixedInput
+                    type="number"
+                    value={ closing[ k ] }
+                    disabled={ isReadOnly }
+                    onChange={ e =>
+                    {
+                      setHasUserEdited( true )
+                      setClosing( { ...closing, [ k ]: Number( e.target.value ) || 0 } )
+                    } }
+                  />
+                </td>
+                <td className="text-right">
+                  ₹{ ( closing[ k ] * v ).toFixed( 2 ) }
+                </td>
+              </tr>
+            ) ) }
+
+            {/* TOTAL */ }
             <tr className="border-t font-bold">
               <td>Total Actual Cash</td>
               <td />
               <td className="text-right">₹{ actualCash.toFixed( 2 ) }</td>
             </tr>
+
           </tbody>
+
         </table>
 
-        {/* CASH RECONCILIATION */}
+        {/* CASH RECONCILIATION */ }
         <div className="mt-4 space-y-1 text-sm">
           <div className="flex justify-between">
             <span>Opening Cash</span>
@@ -281,9 +338,8 @@ export default function ClosingPage ( {
             <span>₹{ expectedCash.toFixed( 2 ) }</span>
           </div>
           <div
-            className={ `flex justify-between font-bold ${
-              shortage > 0 ? "text-red-600" : "text-green-600"
-            }` }
+            className={ `flex justify-between font-bold ${ shortage > 0 ? "text-red-600" : "text-green-600"
+              }` }
           >
             <span>{ shortage > 0 ? "SHORTAGE" : "EXCESS" }</span>
             <span>₹{ Math.abs( shortage ).toFixed( 2 ) }</span>
@@ -291,7 +347,7 @@ export default function ClosingPage ( {
         </div>
       </Card>
 
-      {/* NEXT DAY OPENING */}
+      {/* NEXT DAY OPENING */ }
       <Card className="p-4">
         <div className="flex justify-between items-center mb-2">
           <h3 className="font-bold">Next Day Opening</h3>
@@ -304,7 +360,12 @@ export default function ClosingPage ( {
 
         <table className="w-full text-sm">
           <tbody>
-            { DENOMS.map( ( [ l, k, v ] ) => (
+
+            <tr className="font-bold bg-gray-100">
+              <td colSpan={ 3 }>CASH NOTES</td>
+            </tr>
+
+            { DENOMS.filter( d => CASH_KEYS.includes( d[ 1 ] as any ) ).map( ( [ l, k, v ] ) => (
               <tr key={ k }>
                 <td>{ l }</td>
                 <td>
@@ -313,6 +374,8 @@ export default function ClosingPage ( {
                     value={ nextDay[ k ] }
                     disabled={ isReadOnly }
                     onChange={ e =>
+                    {
+                      setHasUserEdited( true )
                       setNextDay( {
                         ...nextDay,
                         [ k ]: Math.min(
@@ -320,7 +383,7 @@ export default function ClosingPage ( {
                           closing[ k ]
                         ),
                       } )
-                    }
+                    } }
                   />
                 </td>
                 <td className="text-right">
@@ -328,16 +391,51 @@ export default function ClosingPage ( {
                 </td>
               </tr>
             ) ) }
+
+            <tr className="font-bold bg-gray-100">
+              <td colSpan={ 3 }>COINS</td>
+            </tr>
+
+            { DENOMS.filter( d => COIN_KEYS.includes( d[ 1 ] as any ) ).map( ( [ l, k, v ] ) => (
+              <tr key={ k }>
+                <td>{ l }</td>
+                <td>
+                  <FixedInput
+                    type="number"
+                    value={ nextDay[ k ] }
+                    disabled={ isReadOnly }
+                    onChange={ e =>
+                    {
+                      setHasUserEdited( true )
+                      setNextDay( {
+                        ...nextDay,
+                        [ k ]: Math.min(
+                          Number( e.target.value ) || 0,
+                          closing[ k ]
+                        ),
+                      } )
+                    } }
+                  />
+                </td>
+                <td className="text-right">
+                  ₹{ ( nextDay[ k ] * v ).toFixed( 2 ) }
+                </td>
+              </tr>
+            ) ) }
+
+            {/* TOTAL */ }
             <tr className="border-t text-lg font-bold">
               <td>Next Day Total</td>
               <td />
               <td className="text-right">₹{ nextDayTotal.toFixed( 2 ) }</td>
             </tr>
+
           </tbody>
+
         </table>
       </Card>
 
-      {/* AVAILABLE CASH */}
+      {/* AVAILABLE CASH */ }
       <Card className="p-4">
         <h3 className="font-bold mb-2">Available Cash (Auto Calculated)</h3>
         <table className="w-full text-sm">
@@ -362,82 +460,82 @@ export default function ClosingPage ( {
         </table>
       </Card>
 
-      {/* PRINT PREVIEW */}
+      {/* PRINT PREVIEW */ }
       <Card ref={ printRef } className="p-3 text-sm">
-  <div className="center bold">Smart Mart & Smart Fashions</div>
-  <div className="center bold">{ user.counterName }</div>
-  <div className="center text-xs">{ entry.date }</div>
-  <div className="line" />
+        <div className="center bold">Smart Mart & Smart Fashions</div>
+        <div className="center bold">{ user.counterName }</div>
+        <div className="center text-xs">{ entry.date }</div>
+        <div className="line" />
 
-  <table>
-    <tbody>
-      <tr>
-        <td>Opening Cash</td>
-        <td className="right">₹{ openingCash.toFixed( 2 ) }</td>
-      </tr>
-      <tr>
-        <td>Total Sales</td>
-        <td className="right">
-          ₹{ ( cashSales + totalIn + totalOut ).toFixed( 2 ) }
-        </td>
-      </tr>
-      <tr>
-        <td>Cash Sales</td>
-        <td className="right">₹{ cashSales.toFixed( 2 ) }</td>
-      </tr>
-      <tr>
-        <td>Payments IN</td>
-        <td className="right">₹{ totalIn.toFixed( 2 ) }</td>
-      </tr>
-      <tr>
-        <td>Payments OUT</td>
-        <td className="right">₹{ totalOut.toFixed( 2 ) }</td>
-      </tr>
-      <tr className="bold">
-        <td>Expected Cash</td>
-        <td className="right">₹{ expectedCash.toFixed( 2 ) }</td>
-      </tr>
-      <tr className="bold">
-        <td>Actual Cash</td>
-        <td className="right">₹{ actualCash.toFixed( 2 ) }</td>
-      </tr>
-      <tr className="bold">
-        <td>{ shortage > 0 ? "SHORTAGE" : "EXCESS" }</td>
-        <td className="right">
-          ₹{ Math.abs( shortage ).toFixed( 2 ) }
-        </td>
-      </tr>
-    </tbody>
-  </table>
+        <table>
+          <tbody>
+            <tr>
+              <td>Opening Cash</td>
+              <td className="right">₹{ openingCash.toFixed( 2 ) }</td>
+            </tr>
+            <tr>
+              <td>Total Sales</td>
+              <td className="right">
+                ₹{ ( cashSales + totalIn + totalOut ).toFixed( 2 ) }
+              </td>
+            </tr>
+            <tr>
+              <td>Cash Sales</td>
+              <td className="right">₹{ cashSales.toFixed( 2 ) }</td>
+            </tr>
+            <tr>
+              <td>Payments IN</td>
+              <td className="right">₹{ totalIn.toFixed( 2 ) }</td>
+            </tr>
+            <tr>
+              <td>Payments OUT</td>
+              <td className="right">₹{ totalOut.toFixed( 2 ) }</td>
+            </tr>
+            <tr className="bold">
+              <td>Expected Cash</td>
+              <td className="right">₹{ expectedCash.toFixed( 2 ) }</td>
+            </tr>
+            <tr className="bold">
+              <td>Actual Cash</td>
+              <td className="right">₹{ actualCash.toFixed( 2 ) }</td>
+            </tr>
+            <tr className="bold">
+              <td>{ shortage > 0 ? "SHORTAGE" : "EXCESS" }</td>
+              <td className="right">
+                ₹{ Math.abs( shortage ).toFixed( 2 ) }
+              </td>
+            </tr>
+          </tbody>
+        </table>
 
-  <div className="line" />
-  <div className="center bold">Available Cash Denominations</div>
+        <div className="line" />
+        <div className="center bold">Available Cash Denominations</div>
 
-  <table>
-    <tbody>
-      { DENOMS.map( ( [ l, k, v ] ) =>
-        availableDenoms[ k ] > 0 ? (
-          <tr key={ k }>
-            <td>{ l } × { availableDenoms[ k ] }</td>
-            <td className="right">
-              ₹{ ( availableDenoms[ k ] * v ).toFixed( 2 ) }
-            </td>
-          </tr>
-        ) : null
-      ) }
-      <tr className="bold">
-        <td>Available Cash Total</td>
-        <td className="right">₹{ availableCash.toFixed( 2 ) }</td>
-      </tr>
-    </tbody>
-  </table>
+        <table>
+          <tbody>
+            { DENOMS.map( ( [ l, k, v ] ) =>
+              availableDenoms[ k ] > 0 ? (
+                <tr key={ k }>
+                  <td>{ l } × { availableDenoms[ k ] }</td>
+                  <td className="right">
+                    ₹{ ( availableDenoms[ k ] * v ).toFixed( 2 ) }
+                  </td>
+                </tr>
+              ) : null
+            ) }
+            <tr className="bold">
+              <td>Available Cash Total</td>
+              <td className="right">₹{ availableCash.toFixed( 2 ) }</td>
+            </tr>
+          </tbody>
+        </table>
 
-  <div className="line" />
-  <div className="flex justify-between bold">
-    <span>Closed By</span>
-    <span>{ closedBy || "-" }</span>
-  </div>
-</Card>
+        <div className="line" />
+        <div className="flex justify-between bold">
+          <span>Closed By</span>
+          <span>{ closedBy || "-" }</span>
+        </div>
+      </Card>
 
 
 

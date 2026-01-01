@@ -1,68 +1,96 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import type { DayEntry, DenominationCount } from "@/lib/types"
 import
-  {
-    calculateCashSales,
-    calculateClosingCash,
-    calculatePaymentSummary,
-    calculateExpectedCashWithInOut,
-  } from "@/lib/types"
+{
+  calculateCashSales,
+  calculateClosingCash,
+  calculatePaymentSummary,
+  calculateExpectedCashWithInOut,
+} from "@/lib/types"
 import { X } from "lucide-react"
-import
-  {
-    updateEntryOpeningCash,
-    updateEntryClosingCash,
-  } from "@/app/actions/admin"
+import { getOpeningCashForDate } from "@/app/actions/counter"
+import { updateEntryOpeningCash } from "@/app/actions/admin"
 
-interface AdminEntryDetailModalProps
+/* ================= CONSTANTS ================= */
+
+const EMPTY_DENOMS: DenominationCount = {
+  notes500: 0,
+  notes200: 0,
+  notes100: 0,
+  notes50: 0,
+  notes20: 0,
+  notes10: 0,
+  coins10: 0,
+  coins5: 0,
+  coins2: 0,
+  coins1: 0,
+}
+
+const DENOMS: Array<[ string, keyof DenominationCount, number ]> = [
+  [ "₹500", "notes500", 500 ],
+  [ "₹200", "notes200", 200 ],
+  [ "₹100", "notes100", 100 ],
+  [ "₹50", "notes50", 50 ],
+  [ "₹20", "notes20", 20 ],
+  [ "₹10", "notes10", 10 ],
+  [ "₹10", "coins10", 10 ],
+  [ "₹5", "coins5", 5 ],
+  [ "₹2", "coins2", 2 ],
+  [ "₹1", "coins1", 1 ],
+]
+
+const subtractDenoms = (
+  closing: DenominationCount,
+  nextDay: DenominationCount
+): DenominationCount =>
+{
+  const r = { ...EMPTY_DENOMS }
+    ; ( Object.keys( r ) as ( keyof DenominationCount )[] ).forEach( k =>
+    {
+      r[ k ] = Math.max( 0, closing[ k ] - ( nextDay[ k ] || 0 ) )
+    } )
+  return r
+}
+
+/* ================= PROPS ================= */
+
+interface Props
 {
   entry: DayEntry
   onClose: () => void
   onUpdate: () => void
 }
 
+/* ================= COMPONENT ================= */
+
 export default function AdminEntryDetailModal ( {
   entry,
   onClose,
   onUpdate,
-}: AdminEntryDetailModalProps )
+}: Props )
 {
 
-  /* ================= STATE ================= */
+  const [ openingCash, setOpeningCash ] = useState( 0 )
+  const [ loadingOpening, setLoadingOpening ] = useState( true )
 
-  // ✅ OPENING
-  const [ openingCash, setOpeningCash ] = useState( entry.openingCash )
-  const [ openingDenominations, setOpeningDenominations ] =
-    useState<DenominationCount>( entry.openingDenominations )
+  /* ===== FETCH OPENING CASH (SINGLE SOURCE OF TRUTH) ===== */
 
-  // ✅ CLOSING
-  const [ closingDenominations, setClosingDenominations ] =
-    useState<DenominationCount>( entry.closingDenominations )
+  useEffect(() =>
+{
+  setOpeningCash(entry.openingCash || 0)
+  setLoadingOpening(false)
+}, [entry._id])
 
-  /* ================= SYNC ENTRY ================= */
 
-  useEffect( () =>
-  {
-    setOpeningCash( entry.openingCash )
-    setOpeningDenominations( entry.openingDenominations )
-    setClosingDenominations( entry.closingDenominations )
-  }, [ entry ] )
-
-  /* ================= CASH SALES ================= */
+  /* ================= CALCULATIONS ================= */
 
   const isFashionBoth = entry.counterName === "Smart Fashion (Both)"
   const cashSales = calculateCashSales( entry.sales, isFashionBoth )
-
-  /* ================= PAYMENTS ================= */
-
   const { totalIn, totalOut } = calculatePaymentSummary( entry.payments )
-
-  /* ================= CALCULATIONS ================= */
 
   const expectedCash = calculateExpectedCashWithInOut(
     openingCash,
@@ -70,40 +98,46 @@ export default function AdminEntryDetailModal ( {
     entry.payments
   )
 
-  const actualCash = calculateClosingCash( closingDenominations )
+  const actualCash = calculateClosingCash( entry.closingDenominations )
   const shortage = expectedCash - actualCash
 
-  /* ================= ACTIONS ================= */
+  const nextDayTotal = calculateClosingCash(
+    entry.nextDayOpeningDenominations || EMPTY_DENOMS
+  )
 
-  const handleUpdateOpening = async () =>
+  const availableDenoms = subtractDenoms(
+    entry.closingDenominations,
+    entry.nextDayOpeningDenominations || EMPTY_DENOMS
+  )
+
+  const availableCash = calculateClosingCash( availableDenoms )
+
+  const totalSales =
+    cashSales + entry.payments.reduce( ( s, p ) => s + p.amount, 0 )
+
+  /* ================= ACTION ================= */
+
+  const handleOverrideOpening = async () =>
   {
     await updateEntryOpeningCash(
       entry._id!,
       openingCash,
-      openingDenominations
+      entry.openingDenominations || EMPTY_DENOMS
     )
-    onUpdate()
-  }
-
-  const handleUpdateClosing = async () =>
-  {
-    await updateEntryClosingCash( entry._id!, closingDenominations )
     onUpdate()
   }
 
   /* ================= JSX ================= */
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-background rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-background w-full max-w-5xl rounded-lg max-h-[90vh] overflow-y-auto">
 
-        {/* ===== HEADER ===== */ }
-        <div className="sticky top-0 bg-background border-b p-4 flex justify-between items-center">
+        {/* HEADER */ }
+        <div className="sticky top-0 bg-background border-b p-4 flex justify-between">
           <div>
             <h2 className="text-2xl font-bold">{ entry.counterName }</h2>
-            <p className="text-sm text-muted-foreground">
-              { new Date( entry.date ).toLocaleDateString( "en-IN" ) }
-            </p>
+            <p className="text-sm text-muted-foreground">{ entry.date }</p>
           </div>
           <Button variant="ghost" size="sm" onClick={ onClose }>
             <X className="w-5 h-5" />
@@ -112,122 +146,103 @@ export default function AdminEntryDetailModal ( {
 
         <div className="p-6 space-y-6">
 
-          {/* ===== OPENING CASH ===== */ }
-          <Card className="p-6">
-            <h3 className="text-lg font-bold mb-4">
-              Opening Cash (Admin Override)
-            </h3>
+          {/* SUMMARY CARD */ }
+          <Card className="p-6 space-y-2">
+            <h3 className="text-xl font-bold mb-2">Day Summary</h3>
 
-            <Input
-              type="number"
-              value={ openingCash }
-              onChange={ e => setOpeningCash( Number( e.target.value ) || 0 ) }
-            />
-
-            <div className="grid grid-cols-4 gap-3 mt-4">
-              { Object.entries( openingDenominations ).map( ( [ k, v ] ) => (
-                <div key={ k }>
-                  <label className="text-xs">{ k }</label>
-                  <Input
-                    type="number"
-                    value={ v }
-                    onChange={ e =>
-                      setOpeningDenominations( {
-                        ...openingDenominations,
-                        [ k ]: Number( e.target.value ) || 0,
-                      } )
-                    }
-                  />
-                </div>
-              ) ) }
+            <div className="flex justify-between">
+              <span>Opening Cash</span>
+              <span>₹{ loadingOpening ? "…" : openingCash.toFixed( 2 ) }</span>
             </div>
 
-            <Button className="mt-4" onClick={ handleUpdateOpening }>
-              Update Opening
-            </Button>
-          </Card>
-
-          {/* ===== CLOSING DENOMINATIONS ===== */ }
-          <Card className="p-6">
-            <h3 className="text-lg font-bold mb-4">
-              Closing Denominations
-            </h3>
-
-            <div className="grid grid-cols-4 gap-3">
-              { Object.entries( closingDenominations ).map( ( [ k, v ] ) => (
-                <div key={ k }>
-                  <label className="text-xs">{ k }</label>
-                  <Input
-                    type="number"
-                    value={ v }
-                    onChange={ e =>
-                      setClosingDenominations( {
-                        ...closingDenominations,
-                        [ k ]: Number( e.target.value ) || 0,
-                      } )
-                    }
-                  />
-                </div>
-              ) ) }
+            <div className="flex justify-between">
+              <span>Total Sales</span>
+              <span>₹{ totalSales.toFixed( 2 ) }</span>
             </div>
 
-            <Button className="mt-4" onClick={ handleUpdateClosing }>
-              Update Closing
-            </Button>
+            <div className="flex justify-between">
+              <span>Cash Sales</span>
+              <span>₹{ cashSales.toFixed( 2 ) }</span>
+            </div>
+
+            <div className="flex justify-between text-green-600">
+              <span>Payments In</span>
+              <span>₹{ totalIn.toFixed( 2 ) }</span>
+            </div>
+
+            <div className="flex justify-between text-red-600">
+              <span>Payments Out</span>
+              <span>₹{ totalOut.toFixed( 2 ) }</span>
+            </div>
+
+            <div className="flex justify-between">
+              <span>Next Day Opening</span>
+              <span>₹{ nextDayTotal.toFixed( 2 ) }</span>
+            </div>
+
+            <div className="border-t pt-2 flex justify-between font-bold">
+              <span>Expected Cash</span>
+              <span>₹{ expectedCash.toFixed( 2 ) }</span>
+            </div>
+
+            <div className="flex justify-between font-bold">
+              <span>Actual Cash</span>
+              <span>₹{ actualCash.toFixed( 2 ) }</span>
+            </div>
+
+            <div
+              className={ `border-t pt-2 flex justify-between font-extrabold ${ shortage > 0
+                ? "text-red-600"
+                : shortage < 0
+                  ? "text-green-600"
+                  : ""
+                }` }
+            >
+              <span>
+                { shortage > 0
+                  ? "SHORTAGE"
+                  : shortage < 0
+                    ? "EXCESS"
+                    : "BALANCED" }
+              </span>
+              <span>₹{ Math.abs( shortage ).toFixed( 2 ) }</span>
+            </div>
+
+            <div className="border-t pt-2">
+              <div className="font-semibold mb-1">Available Cash</div>
+              { DENOMS.map( ( [ l, k, v ] ) =>
+                availableDenoms[ k ] > 0 ? (
+                  <div key={ k } className="flex justify-between text-sm">
+                    <span>{ l } × { availableDenoms[ k ] }</span>
+                    <span>₹{ ( availableDenoms[ k ] * v ).toFixed( 2 ) }</span>
+                  </div>
+                ) : null
+              ) }
+              <div className="flex justify-between font-bold border-t mt-1 pt-1">
+                <span>Total</span>
+                <span>₹{ availableCash.toFixed( 2 ) }</span>
+              </div>
+            </div>
+
+            <div className="flex justify-between border-t pt-2 font-bold">
+              <span>Closed By</span>
+              <span>{ entry.closedBy || "-" }</span>
+            </div>
           </Card>
 
-          {/* ===== CASH RECONCILIATION ===== */ }
+          {/* OPENING CASH OVERRIDE */ }
           <Card className="p-6">
-            <h3 className="text-lg font-bold mb-4">Cash Reconciliation</h3>
-
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span>Opening Cash</span>
-                <span>₹{ openingCash.toFixed( 2 ) }</span>
-              </div>
-
-              <div className="flex justify-between text-green-600">
-                <span>+ Cash Sales</span>
-                <span>₹{ cashSales.toFixed( 2 ) }</span>
-              </div>
-
-              <div className="flex justify-between text-green-600">
-                <span>+ Payments In</span>
-                <span>₹{ totalIn.toFixed( 2 ) }</span>
-              </div>
-
-              <div className="flex justify-between text-red-600">
-                <span>- Payments Out</span>
-                <span>₹{ totalOut.toFixed( 2 ) }</span>
-              </div>
-
-              <div className="border-t pt-2 flex justify-between font-bold">
-                <span>Expected Cash</span>
-                <span>₹{ expectedCash.toFixed( 2 ) }</span>
-              </div>
-
-              <div className="flex justify-between font-bold">
-                <span>Actual Cash</span>
-                <span>₹{ actualCash.toFixed( 2 ) }</span>
-              </div>
-
-              <div
-                className={ `border-t pt-2 flex justify-between text-2xl font-extrabold ${ shortage > 0
-                    ? "text-red-600"
-                    : shortage < 0
-                      ? "text-green-600"
-                      : ""
-                  }` }
-              >
-                <span>
-                  { shortage > 0
-                    ? "SHORTAGE"
-                    : shortage < 0
-                      ? "EXCESS"
-                      : "BALANCED" }
-                </span>
-                <span>₹{ Math.abs( shortage ).toFixed( 2 ) }</span>
-              </div>
+            <h3 className="text-lg font-bold mb-2">Override Opening Cash</h3>
+            <div className="flex gap-3">
+              <input
+                type="number"
+                className="border rounded px-3 py-1 w-full"
+                value={ openingCash }
+                onChange={ e =>
+                  setOpeningCash( Number( e.target.value ) || 0 )
+                }
+              />
+              <Button onClick={ handleOverrideOpening }>Update</Button>
             </div>
           </Card>
 

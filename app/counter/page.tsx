@@ -7,17 +7,25 @@ export default async function CounterPage ()
 {
   const user = await getSerializedSession()
 
+  // 🔐 must be logged in
   if ( !user )
   {
     redirect( "/" )
   }
 
+  // 🔐 ONLY counter can access /counter
   if ( user.role !== "counter" )
   {
     redirect( "/admin" )
   }
 
+  // 📦 fetch today's entry
   const entry = await getTodayEntry()
 
-  return <CounterDashboard user={ user } initialEntry={ entry } />
+  return (
+    <CounterDashboard
+      user={ user }
+      initialEntry={ entry }
+    />
+  )
 }

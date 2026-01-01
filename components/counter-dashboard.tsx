@@ -1,14 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { logout } from "@/app/actions/auth"
 import
-  {
-    getEntryByDate,
-    verifyOpeningCash,
-  } from "@/app/actions/counter"
+{
+  getEntryByDate,
+  verifyOpeningCash,
+} from "@/app/actions/counter"
 import type { User } from "@/lib/auth"
 import type { DayEntry } from "@/lib/types"
 import { LogOut, CheckCircle, Calendar, AlertCircle } from "lucide-react"
@@ -22,11 +22,13 @@ interface CounterDashboardProps
 {
   user: User
   initialEntry: DayEntry | null
+  isAdminView?: boolean
 }
 
 export default function CounterDashboard ( {
   user,
   initialEntry,
+  isAdminView = false,
 }: CounterDashboardProps )
 {
   const today = new Date().toISOString().split( "T" )[ 0 ]
@@ -62,26 +64,29 @@ export default function CounterDashboard ( {
 
   const handleVerifyOpening = async () =>
   {
-    if ( !entry ) return
+    if ( !entry || isAdminView ) return
     setVerifyingOpening( true )
     await verifyOpeningCash( selectedDate )
     await refreshEntry()
     setVerifyingOpening( false )
   }
 
-  /* ================= AUTO REFRESH ================= */
+  /* ================= AUTO REFRESH (COUNTER ONLY) ================= */
 
   useEffect( () =>
   {
+    if ( isAdminView ) return
+
     const interval = setInterval( async () =>
     {
       const updated = await getEntryByDate( selectedDate )
       setEntry( updated )
     }, 30000 )
-    return () => clearInterval( interval )
-  }, [ selectedDate ] )
 
-  /* ================= EMPTY DATE STATE (FIX) ================= */
+    return () => clearInterval( interval )
+  }, [ selectedDate, isAdminView ] )
+
+  /* ================= EMPTY DATE ================= */
 
   if ( !loading && !entry )
   {
@@ -89,15 +94,12 @@ export default function CounterDashboard ( {
       <div className="flex h-[70vh] items-center justify-center">
         <div className="max-w-md text-center space-y-4">
           <AlertCircle className="mx-auto h-10 w-10 text-muted-foreground" />
-
           <h2 className="text-lg font-semibold">
             No entry found for this date
           </h2>
-
           <p className="text-sm text-muted-foreground">
             There was no counter activity recorded on the selected date.
           </p>
-
           <Button
             variant="outline"
             onClick={ () =>
@@ -113,8 +115,6 @@ export default function CounterDashboard ( {
     )
   }
 
-  /* ================= LOADING ================= */
-
   if ( loading )
   {
     return (
@@ -126,7 +126,9 @@ export default function CounterDashboard ( {
 
   if ( !entry ) return null
 
-  const isReadOnly = entry.status !== "open"
+  /* ================= READ ONLY LOGIC ================= */
+
+  const isReadOnly = isAdminView || entry.status !== "open"
 
   return (
     <div className="min-h-screen bg-background">
@@ -148,7 +150,6 @@ export default function CounterDashboard ( {
           </div>
 
           <div className="flex items-center gap-4">
-            {/* DATE PICKER */ }
             <div className="flex items-center gap-2">
               <Calendar className="w-5 h-5 text-muted-foreground" />
               <Input
@@ -159,7 +160,6 @@ export default function CounterDashboard ( {
               />
             </div>
 
-            {/* STATUS BADGES */ }
             { entry.openingVerified && (
               <div className="flex items-center gap-2 text-green-600">
                 <CheckCircle className="w-5 h-5" />
@@ -185,12 +185,21 @@ export default function CounterDashboard ( {
               </div>
             ) }
 
-            <Button onClick={ () => logout() } variant="outline" size="sm">
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
-            </Button>
+            { !isAdminView && (
+              <Button onClick={ () => logout() } variant="outline" size="sm">
+                <LogOut className="w-4 h-4 mr-2" />
+                Logout
+              </Button>
+            ) }
           </div>
         </div>
+
+        {/* ================= ADMIN BANNER ================= */ }
+        { isAdminView && (
+          <div className="bg-yellow-100 text-yellow-800 px-4 py-2 text-sm font-semibold">
+            🔒 ADMIN VIEW — READ ONLY
+          </div>
+        ) }
 
         {/* ================= PAGE NAV ================= */ }
         <div className="flex gap-2 px-4 pb-2">
@@ -223,8 +232,8 @@ export default function CounterDashboard ( {
 
       {/* ================= MAIN ================= */ }
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* ===== STEP 0: OPENING VERIFY ===== */ }
-        { entry.status === "open" &&
+        { !isAdminView &&
+          entry.status === "open" &&
           !entry.openingVerified &&
           entry.openingDenominations && (
             <OpeningVerifyPage
@@ -235,7 +244,6 @@ export default function CounterDashboard ( {
             />
           ) }
 
-        {/* ===== STEP 1–3 ===== */ }
         { currentPage === "payments" && (
           <PaymentsPage
             entry={ entry }
