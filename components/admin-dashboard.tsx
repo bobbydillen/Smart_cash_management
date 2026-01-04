@@ -46,6 +46,14 @@ const subtractDenoms = (
   return r
 }
 
+const formatTime = ( iso?: string ) =>
+  iso
+    ? new Date( iso ).toLocaleTimeString( "en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    } )
+    : "-"
+
 /* ================= COMPONENT ================= */
 
 interface AdminDashboardProps
@@ -128,7 +136,6 @@ export default function AdminDashboard ( {
     let totalCashSales = 0
     let totalCardUpi = 0
     let totalCredit = 0
-    let totalPaymentsOut = 0
     let totalAvailableCash = 0
     let totalShortage = 0
 
@@ -140,7 +147,6 @@ export default function AdminDashboard ( {
     {
       const isBoth = entry.counterName === "Smart Fashion (Both)"
       const cashSales = calculateCashSales( entry.sales, isBoth )
-      const { totalOut } = calculatePaymentSummary( entry.payments )
 
       const availableCash = calculateClosingCash(
         subtractDenoms(
@@ -149,25 +155,26 @@ export default function AdminDashboard ( {
         )
       )
 
-      totalCashSales += cashSales
-      totalPaymentsOut += totalOut
-      totalAvailableCash += availableCash
-
       const card = isBoth
-        ? ( entry.sales.martCardUpi || 0 ) + ( entry.sales.fashionCardUpi || 0 )
+        ? ( entry.sales.martCardUpi || 0 ) +
+        ( entry.sales.fashionCardUpi || 0 )
         : entry.sales.cardUpiSales || 0
 
       const credit = isBoth
-        ? ( entry.sales.martCredit || 0 ) + ( entry.sales.fashionCredit || 0 )
+        ? ( entry.sales.martCredit || 0 ) +
+        ( entry.sales.fashionCredit || 0 )
         : entry.sales.creditSales || 0
 
+      totalCashSales += cashSales
       totalCardUpi += card
       totalCredit += credit
+      totalAvailableCash += availableCash
 
       const total = cashSales + card + credit
 
       if ( entry.counterName.includes( "Fancy" ) ) smartFancyTotal += total
-      else if ( entry.counterName.includes( "Fashion" ) ) smartFashionTotal += total
+      else if ( entry.counterName.includes( "Fashion" ) )
+        smartFashionTotal += total
       else smartMartTotal += total
 
       if ( entry.status !== "open" )
@@ -181,7 +188,6 @@ export default function AdminDashboard ( {
       totalCashSales,
       totalCardUpi,
       totalCredit,
-      totalPaymentsOut,
       totalAvailableCash,
       totalShortage,
       smartMartTotal,
@@ -194,7 +200,6 @@ export default function AdminDashboard ( {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* HEADER */ }
       <header className="bg-card border-b">
         <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between">
           <div>
@@ -229,10 +234,8 @@ export default function AdminDashboard ( {
         </div>
       </header>
 
-      {/* MAIN */ }
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-
-        {/* BIG TOTAL */ }
+        {/* TOTAL SALES */ }
         <Card className="p-6 text-center">
           <div className="text-sm text-muted-foreground">Total Sales</div>
           <div className="text-4xl font-extrabold mt-1">
@@ -247,7 +250,7 @@ export default function AdminDashboard ( {
           <Stat label="Smart Mart Fancy Total" value={ summary.smartFancyTotal } />
         </div>
 
-        {/* CASH & PAYMENTS */ }
+        {/* CASH BREAKUP */ }
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <Stat label="Cash Sales" value={ summary.totalCashSales } green />
           <Stat label="Card / UPI" value={ summary.totalCardUpi } blue />
@@ -276,7 +279,7 @@ export default function AdminDashboard ( {
           </div>
         </Card>
 
-        {/* COUNTER STATUS (UNCHANGED LOGIC) */ }
+        {/* COUNTER STATUS */ }
         <Card className="p-6">
           <h2 className="text-xl font-bold mb-4">Counter Status</h2>
 
@@ -310,7 +313,39 @@ export default function AdminDashboard ( {
               <div key={ entry._id } className="border rounded-lg p-4 mb-3">
                 <h3 className="font-semibold">{ entry.counterName }</h3>
 
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-2 text-sm">
+                {/* ENTRY STATUS */ }
+                <div className="text-xs mt-1">
+                  { entry.status === "open" && (
+                    <span className="text-blue-600 font-medium">● Open</span>
+                  ) }
+                  { entry.status === "submitted" && (
+                    <span className="text-orange-600 font-medium">
+                      ● Submitted
+                    </span>
+                  ) }
+                  { entry.status === "confirmed" && (
+                    <span className="text-green-600 font-medium">
+                      ● Confirmed
+                    </span>
+                  ) }
+                </div>
+
+                {/* OPENING VERIFIED */ }
+                <div className="text-xs mt-1">
+                  Opening:
+                  { entry.openingVerified ? (
+                    <span className="text-green-600 font-medium">
+                      { " " }VERIFIED at { formatTime( entry.openingVerifiedAt ) }
+                    </span>
+                  ) : (
+                    <span className="text-red-600 font-medium">
+                      { " " }NOT VERIFIED
+                    </span>
+                  ) }
+                </div>
+
+                {/* DETAILS GRID (RESTORED) */ }
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-3 text-sm">
                   <div>Total Sales: ₹{ totalSales.toFixed( 2 ) }</div>
                   <div>Cash Sales: ₹{ cashSales.toFixed( 2 ) }</div>
                   <div>Payments OUT: ₹{ totalOut.toFixed( 2 ) }</div>
