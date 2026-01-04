@@ -7,23 +7,46 @@ import { Input } from "@/components/ui/input"
 import { logout } from "@/app/actions/auth"
 import { getAllEntries, confirmEntry, unlockEntry } from "@/app/actions/admin"
 import type { User } from "@/lib/auth"
-import type { DayEntry } from "@/lib/types"
+import type { DayEntry, DenominationCount } from "@/lib/types"
 import
 {
   calculateCashSales,
   calculatePaymentSummary,
+  calculateClosingCash,
 } from "@/lib/types"
-import
-{
-  LogOut,
-  CheckCircle,
-  Unlock,
-  Calendar,
-  AlertCircle,
-  KeyRound,
-} from "lucide-react"
+import { LogOut, Unlock, Calendar, KeyRound } from "lucide-react"
 import AdminEntryDetailModal from "./admin-entry-detail-modal"
 import { useRouter } from "next/navigation"
+
+/* ================= HELPERS ================= */
+
+const EMPTY_DENOMS: DenominationCount = {
+  notes500: 0,
+  notes200: 0,
+  notes100: 0,
+  notes50: 0,
+  notes20: 0,
+  notes10: 0,
+  coins10: 0,
+  coins5: 0,
+  coins2: 0,
+  coins1: 0,
+}
+
+const subtractDenoms = (
+  closing: DenominationCount,
+  nextDay?: DenominationCount
+) =>
+{
+  const r = { ...EMPTY_DENOMS }
+    ; ( Object.keys( r ) as ( keyof DenominationCount )[] ).forEach( k =>
+    {
+      r[ k ] = Math.max( 0, closing[ k ] - ( nextDay?.[ k ] || 0 ) )
+    } )
+  return r
+}
+
+/* ================= COMPONENT ================= */
 
 interface AdminDashboardProps
 {
@@ -44,6 +67,7 @@ export default function AdminDashboard ( {
   const [ selectedEntry, setSelectedEntry ] = useState<DayEntry | null>( null )
 
   /* ================= DEDUPE ================= */
+
   const uniqueEntries = useMemo( () =>
   {
     const map = new Map<string, DayEntry>()
@@ -70,14 +94,15 @@ export default function AdminDashboard ( {
   }, [ entries ] )
 
   /* ================= DATE ================= */
+
   const handleDateChange = async ( date: string ) =>
   {
     setSelectedDate( date )
-    const updated = await getAllEntries( date )
-    setEntries( updated )
+    setEntries( await getAllEntries( date ) )
   }
 
   /* ================= ACTIONS ================= */
+
   const handleConfirm = async ( id: string ) =>
   {
     if ( confirm( "Confirm this entry?" ) )
@@ -97,30 +122,53 @@ export default function AdminDashboard ( {
   }
 
   /* ================= SUMMARY ================= */
+
   const summary = useMemo( () =>
   {
     let totalCashSales = 0
     let totalCardUpi = 0
     let totalCredit = 0
     let totalPaymentsOut = 0
+    let totalAvailableCash = 0
     let totalShortage = 0
 
-    uniqueEntries.forEach( ( entry ) =>
+    let smartMartTotal = 0
+    let smartFashionTotal = 0
+    let smartFancyTotal = 0
+
+    uniqueEntries.forEach( entry =>
     {
       const isBoth = entry.counterName === "Smart Fashion (Both)"
-      const { totalOut } = calculatePaymentSummary( entry.payments )
       const cashSales = calculateCashSales( entry.sales, isBoth )
+      const { totalOut } = calculatePaymentSummary( entry.payments )
+
+      const availableCash = calculateClosingCash(
+        subtractDenoms(
+          entry.closingDenominations,
+          entry.nextDayOpeningDenominations
+        )
+      )
 
       totalCashSales += cashSales
       totalPaymentsOut += totalOut
+      totalAvailableCash += availableCash
 
-      totalCardUpi += isBoth
+      const card = isBoth
         ? ( entry.sales.martCardUpi || 0 ) + ( entry.sales.fashionCardUpi || 0 )
         : entry.sales.cardUpiSales || 0
 
-      totalCredit += isBoth
+      const credit = isBoth
         ? ( entry.sales.martCredit || 0 ) + ( entry.sales.fashionCredit || 0 )
         : entry.sales.creditSales || 0
+
+      totalCardUpi += card
+      totalCredit += credit
+
+      const total = cashSales + card + credit
+
+      if ( entry.counterName.includes( "Fancy" ) ) smartFancyTotal += total
+      else if ( entry.counterName.includes( "Fashion" ) ) smartFashionTotal += total
+      else smartMartTotal += total
 
       if ( entry.status !== "open" )
       {
@@ -129,21 +177,26 @@ export default function AdminDashboard ( {
     } )
 
     return {
+      totalSales: totalCashSales + totalCardUpi + totalCredit,
       totalCashSales,
       totalCardUpi,
       totalCredit,
       totalPaymentsOut,
+      totalAvailableCash,
       totalShortage,
-      totalSales: totalCashSales + totalCardUpi + totalCredit,
+      smartMartTotal,
+      smartFashionTotal,
+      smartFancyTotal,
     }
   }, [ uniqueEntries ] )
 
   /* ================= RENDER ================= */
+
   return (
     <div className="min-h-screen bg-background">
       {/* HEADER */ }
       <header className="bg-card border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between">
           <div>
             <h1 className="text-2xl font-bold">Admin Dashboard</h1>
             <p className="text-sm text-muted-foreground">
@@ -151,12 +204,12 @@ export default function AdminDashboard ( {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Calendar className="w-5 h-5 text-muted-foreground" />
+          <div className="flex gap-3 items-center">
+            <Calendar className="w-5 h-5" />
             <Input
               type="date"
               value={ selectedDate }
-              onChange={ ( e ) => handleDateChange( e.target.value ) }
+              onChange={ e => handleDateChange( e.target.value ) }
             />
 
             <Button
@@ -178,190 +231,140 @@ export default function AdminDashboard ( {
 
       {/* MAIN */ }
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* SUMMARY */ }
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <Card className="p-4">
-            <div className="text-sm">Total Sales</div>
-            <div className="text-2xl font-bold">
-              ₹{ summary.totalSales.toFixed( 2 ) }
-            </div>
-          </Card>
 
-          <Card className="p-4">
-            <div className="text-sm">Cash Sales</div>
-            <div className="text-2xl font-bold text-green-600">
-              ₹{ summary.totalCashSales.toFixed( 2 ) }
-            </div>
-          </Card>
+        {/* BIG TOTAL */ }
+        <Card className="p-6 text-center">
+          <div className="text-sm text-muted-foreground">Total Sales</div>
+          <div className="text-4xl font-extrabold mt-1">
+            ₹{ summary.totalSales.toFixed( 2 ) }
+          </div>
+        </Card>
 
-          <Card className="p-4">
-            <div className="text-sm">Card / UPI</div>
-            <div className="text-2xl font-bold text-blue-600">
-              ₹{ summary.totalCardUpi.toFixed( 2 ) }
-            </div>
-          </Card>
-
-          <Card className="p-4">
-            <div className="text-sm">Credit</div>
-            <div className="text-2xl font-bold text-yellow-600">
-              ₹{ summary.totalCredit.toFixed( 2 ) }
-            </div>
-          </Card>
-
-          <Card className="p-4">
-            <div className="text-sm">Payments (OUT)</div>
-            <div className="text-2xl font-bold text-red-600">
-              ₹{ summary.totalPaymentsOut.toFixed( 2 ) }
-            </div>
-          </Card>
-
-          <Card className="p-4">
-            <div className="text-sm">
-              { summary.totalShortage > 0
-                ? "Shortage"
-                : summary.totalShortage < 0
-                  ? "Excess"
-                  : "Balanced" }
-            </div>
-            <div
-              className={ `text-2xl font-bold ${ summary.totalShortage > 0
-                ? "text-red-600"
-                : summary.totalShortage < 0
-                  ? "text-green-600"
-                  : ""
-                }` }
-            >
-              ₹{ Math.abs( summary.totalShortage ).toFixed( 2 ) }
-            </div>
-          </Card>
+        {/* BUSINESS BREAKUP */ }
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Stat label="Smart Mart Total" value={ summary.smartMartTotal } />
+          <Stat label="Smart Fashion Total" value={ summary.smartFashionTotal } />
+          <Stat label="Smart Mart Fancy Total" value={ summary.smartFancyTotal } />
         </div>
 
-        {/* COUNTER LIST */ }
+        {/* CASH & PAYMENTS */ }
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <Stat label="Cash Sales" value={ summary.totalCashSales } green />
+          <Stat label="Card / UPI" value={ summary.totalCardUpi } blue />
+          <Stat label="Credit" value={ summary.totalCredit } yellow />
+          <Stat label="Available Cash" value={ summary.totalAvailableCash } />
+        </div>
+
+        {/* SHORTAGE */ }
+        <Card className="p-4 text-center">
+          <div className="text-sm">
+            { summary.totalShortage > 0
+              ? "Total Shortage"
+              : summary.totalShortage < 0
+                ? "Total Excess"
+                : "Balanced" }
+          </div>
+          <div
+            className={ `text-2xl font-bold ${ summary.totalShortage > 0
+              ? "text-red-600"
+              : summary.totalShortage < 0
+                ? "text-green-600"
+                : ""
+              }` }
+          >
+            ₹{ Math.abs( summary.totalShortage ).toFixed( 2 ) }
+          </div>
+        </Card>
+
+        {/* COUNTER STATUS (UNCHANGED LOGIC) */ }
         <Card className="p-6">
           <h2 className="text-xl font-bold mb-4">Counter Status</h2>
 
-          { uniqueEntries.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <AlertCircle className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              No entries found
-            </div>
-          ) : (
-            uniqueEntries.map( ( entry ) =>
-            {
-              const isBoth = entry.counterName === "Smart Fashion (Both)"
-              const cashSales = calculateCashSales( entry.sales, isBoth )
-              const { totalOut } = calculatePaymentSummary( entry.payments )
+          { uniqueEntries.map( entry =>
+          {
+            const isBoth = entry.counterName === "Smart Fashion (Both)"
+            const cashSales = calculateCashSales( entry.sales, isBoth )
+            const { totalOut } = calculatePaymentSummary( entry.payments )
 
-              const totalSales =
-                cashSales +
-                ( isBoth
-                  ? ( entry.sales.martCardUpi || 0 ) +
-                  ( entry.sales.fashionCardUpi || 0 ) +
-                  ( entry.sales.martCredit || 0 ) +
-                  ( entry.sales.fashionCredit || 0 )
-                  : ( entry.sales.cardUpiSales || 0 ) +
-                  ( entry.sales.creditSales || 0 ) )
+            const availableCash = calculateClosingCash(
+              subtractDenoms(
+                entry.closingDenominations,
+                entry.nextDayOpeningDenominations
+              )
+            )
 
-              const shortage = entry.submittedShortage || 0
+            const card = isBoth
+              ? ( entry.sales.martCardUpi || 0 ) +
+              ( entry.sales.fashionCardUpi || 0 )
+              : entry.sales.cardUpiSales || 0
 
-              return (
-                <div
-                  key={ entry._id }
-                  className="border rounded-lg p-4 mb-3"
-                >
-                  <div className="flex justify-between">
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-lg">
-                        { entry.counterName }
-                      </h3>
+            const credit = isBoth
+              ? ( entry.sales.martCredit || 0 ) +
+              ( entry.sales.fashionCredit || 0 )
+              : entry.sales.creditSales || 0
 
-                      {/* STATUS */ }
-                      <div className="text-xs mt-1">
-                        { entry.status === "open" && (
-                          <span className="text-blue-600">● Open</span>
-                        ) }
-                        { entry.status === "submitted" && (
-                          <span className="text-orange-600">● Submitted</span>
-                        ) }
-                        { entry.status === "confirmed" && (
-                          <span className="text-green-600">● Confirmed</span>
-                        ) }
-                      </div>
+            const totalSales = cashSales + card + credit
+            const shortage = entry.submittedShortage || 0
 
-                      {/* OPENING VERIFIED */ }
-                      { entry.openingVerified && (
-                        <div className="flex items-center gap-1 text-xs text-green-600 mt-1">
-                          <CheckCircle className="w-4 h-4" />
-                          Opening Verified
-                          { entry.openingVerifiedAt && (
-                            <span className="text-muted-foreground ml-1">
-                              (
-                              { new Date(
-                                entry.openingVerifiedAt
-                              ).toLocaleTimeString( "en-IN" ) }
-                              )
-                            </span>
-                          ) }
-                        </div>
-                      ) }
+            return (
+              <div key={ entry._id } className="border rounded-lg p-4 mb-3">
+                <h3 className="font-semibold">{ entry.counterName }</h3>
 
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2 text-sm">
-                        <div>Total Sales: ₹{ totalSales.toFixed( 2 ) }</div>
-                        <div>Cash Sales: ₹{ cashSales.toFixed( 2 ) }</div>
-                        <div>Payments (OUT): ₹{ totalOut.toFixed( 2 ) }</div>
-                        <div
-                          className={
-                            shortage > 0
-                              ? "text-red-600"
-                              : shortage < 0
-                                ? "text-green-600"
-                                : ""
-                          }
-                        >
-                          { shortage > 0
-                            ? "Shortage"
-                            : shortage < 0
-                              ? "Excess"
-                              : "Balanced" }{ " " }
-                          ₹{ Math.abs( shortage ).toFixed( 2 ) }
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-3">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={ () => setSelectedEntry( entry ) }
-                      >
-                        View Details
-                      </Button>
-
-                      { entry.status === "submitted" && (
-                        <Button
-                          size="sm"
-                          onClick={ () => handleConfirm( entry._id! ) }
-                        >
-                          Confirm
-                        </Button>
-                      ) }
-
-                      { entry.status !== "open" && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={ () => handleUnlock( entry._id! ) }
-                        >
-                          <Unlock className="w-4 h-4 mr-1" />
-                          Unlock
-                        </Button>
-                      ) }
-                    </div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-2 text-sm">
+                  <div>Total Sales: ₹{ totalSales.toFixed( 2 ) }</div>
+                  <div>Cash Sales: ₹{ cashSales.toFixed( 2 ) }</div>
+                  <div>Payments OUT: ₹{ totalOut.toFixed( 2 ) }</div>
+                  <div>Available Cash: ₹{ availableCash.toFixed( 2 ) }</div>
+                  <div
+                    className={
+                      shortage > 0
+                        ? "text-red-600 font-semibold"
+                        : shortage < 0
+                          ? "text-green-600 font-semibold"
+                          : "font-semibold"
+                    }
+                  >
+                    { shortage > 0
+                      ? "Shortage"
+                      : shortage < 0
+                        ? "Excess"
+                        : "Balanced" }{ " " }
+                    ₹{ Math.abs( shortage ).toFixed( 2 ) }
                   </div>
                 </div>
-              )
-            } )
-          ) }
+
+                <div className="flex gap-3 mt-3">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={ () => setSelectedEntry( entry ) }
+                  >
+                    View Details
+                  </Button>
+
+                  { entry.status === "submitted" && (
+                    <Button
+                      size="sm"
+                      onClick={ () => handleConfirm( entry._id! ) }
+                    >
+                      Confirm
+                    </Button>
+                  ) }
+
+                  { entry.status !== "open" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={ () => handleUnlock( entry._id! ) }
+                    >
+                      <Unlock className="w-4 h-4 mr-1" />
+                      Unlock
+                    </Button>
+                  ) }
+                </div>
+              </div>
+            )
+          } ) }
         </Card>
       </main>
 
@@ -377,3 +380,29 @@ export default function AdminDashboard ( {
     </div>
   )
 }
+
+/* ================= SMALL UI ================= */
+
+const Stat = ( {
+  label,
+  value,
+  green,
+  blue,
+  yellow,
+}: any ) => (
+  <Card className="p-4">
+    <div className="text-sm">{ label }</div>
+    <div
+      className={ `text-2xl font-bold ${ green
+        ? "text-green-600"
+        : blue
+          ? "text-blue-600"
+          : yellow
+            ? "text-yellow-600"
+            : ""
+        }` }
+    >
+      ₹{ value.toFixed( 2 ) }
+    </div>
+  </Card>
+)

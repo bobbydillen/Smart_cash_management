@@ -12,7 +12,6 @@ import
   calculateExpectedCashWithInOut,
 } from "@/lib/types"
 import { X } from "lucide-react"
-import { getOpeningCashForDate } from "@/app/actions/counter"
 import { updateEntryOpeningCash } from "@/app/actions/admin"
 
 /* ================= CONSTANTS ================= */
@@ -73,24 +72,25 @@ export default function AdminEntryDetailModal ( {
   onUpdate,
 }: Props )
 {
-
-  const [ openingCash, setOpeningCash ] = useState( 0 )
-  const [ loadingOpening, setLoadingOpening ] = useState( true )
-
-  /* ===== FETCH OPENING CASH (SINGLE SOURCE OF TRUTH) ===== */
-
-  useEffect(() =>
-{
-  setOpeningCash(entry.openingCash || 0)
-  setLoadingOpening(false)
-}, [entry._id])
-
+  const [ openingCash, setOpeningCash ] = useState( entry.openingCash || 0 )
 
   /* ================= CALCULATIONS ================= */
 
   const isFashionBoth = entry.counterName === "Smart Fashion (Both)"
+
   const cashSales = calculateCashSales( entry.sales, isFashionBoth )
   const { totalIn, totalOut } = calculatePaymentSummary( entry.payments )
+
+  // ✅ FIXED TOTAL SALES (SAME AS ADMIN DASHBOARD)
+  const totalSales =
+    cashSales +
+    ( isFashionBoth
+      ? ( entry.sales.martCardUpi || 0 ) +
+      ( entry.sales.fashionCardUpi || 0 ) +
+      ( entry.sales.martCredit || 0 ) +
+      ( entry.sales.fashionCredit || 0 )
+      : ( entry.sales.cardUpiSales || 0 ) +
+      ( entry.sales.creditSales || 0 ) )
 
   const expectedCash = calculateExpectedCashWithInOut(
     openingCash,
@@ -112,18 +112,11 @@ export default function AdminEntryDetailModal ( {
 
   const availableCash = calculateClosingCash( availableDenoms )
 
-  const totalSales =
-    cashSales + entry.payments.reduce( ( s, p ) => s + p.amount, 0 )
-
   /* ================= ACTION ================= */
 
   const handleOverrideOpening = async () =>
   {
-    await updateEntryOpeningCash(
-      entry._id!,
-      openingCash,
-      entry.openingDenominations || EMPTY_DENOMS
-    )
+    await updateEntryOpeningCash( entry._id!, openingCash )
     onUpdate()
   }
 
@@ -152,10 +145,10 @@ export default function AdminEntryDetailModal ( {
 
             <div className="flex justify-between">
               <span>Opening Cash</span>
-              <span>₹{ loadingOpening ? "…" : openingCash.toFixed( 2 ) }</span>
+              <span>₹{ openingCash.toFixed( 2 ) }</span>
             </div>
 
-            <div className="flex justify-between">
+            <div className="flex justify-between font-semibold">
               <span>Total Sales</span>
               <span>₹{ totalSales.toFixed( 2 ) }</span>
             </div>
@@ -213,7 +206,9 @@ export default function AdminEntryDetailModal ( {
               { DENOMS.map( ( [ l, k, v ] ) =>
                 availableDenoms[ k ] > 0 ? (
                   <div key={ k } className="flex justify-between text-sm">
-                    <span>{ l } × { availableDenoms[ k ] }</span>
+                    <span>
+                      { l } × { availableDenoms[ k ] }
+                    </span>
                     <span>₹{ ( availableDenoms[ k ] * v ).toFixed( 2 ) }</span>
                   </div>
                 ) : null
@@ -238,9 +233,7 @@ export default function AdminEntryDetailModal ( {
                 type="number"
                 className="border rounded px-3 py-1 w-full"
                 value={ openingCash }
-                onChange={ e =>
-                  setOpeningCash( Number( e.target.value ) || 0 )
-                }
+                onChange={ e => setOpeningCash( Number( e.target.value ) || 0 ) }
               />
               <Button onClick={ handleOverrideOpening }>Update</Button>
             </div>

@@ -121,6 +121,11 @@ export default function ClosingPage ( {
   const [ hasUserEdited, setHasUserEdited ] = useState( false )
   const printRef = useRef<HTMLDivElement>( null )
 
+  const [ savedNames, setSavedNames ] = useState<string[]>( [] )
+  const closedByRef = useRef<HTMLInputElement>( null )
+
+
+
   /* ================= SYNC ENTRY ================= */
 
   useEffect( () =>
@@ -135,6 +140,18 @@ export default function ClosingPage ( {
     )
     setClosedBy( entry.closedBy || "" )
   }, [ entry.date ] )
+
+
+  useEffect( () =>
+  {
+    const key = `closedByNames_${ user.counterName || "default" }`
+    const stored = localStorage.getItem( key )
+    if ( stored )
+    {
+      setSavedNames( JSON.parse( stored ) )
+    }
+  }, [ user.counterName ] )
+
 
 
 
@@ -192,37 +209,85 @@ export default function ClosingPage ( {
 
   const handleSubmit = async () =>
   {
+    // ❌ VALIDATION: Closed By is mandatory
+    if ( !closedBy || !closedBy.trim() )
+    {
+      alert( "❌ Please enter Closed By name before submitting the day." )
+      return
+    }
+
+    // 💾 SAVE STAFF NAME (optional but recommended)
+    try
+    {
+      const key = `closedByNames_${ user.counterName || "default" }`
+      const stored = localStorage.getItem( key )
+      const names: string[] = stored ? JSON.parse( stored ) : []
+
+      if ( !names.includes( closedBy.trim() ) )
+      {
+        names.push( closedBy.trim() )
+        localStorage.setItem( key, JSON.stringify( names ) )
+      }
+    }
+    catch ( err )
+    {
+      console.warn( "Closed By name not saved:", err )
+    }
+
+    // ✅ ORIGINAL FLOW (UNCHANGED)
     await saveClosing()
     await saveNextDay()
-    await submitDay( entry.date, closedBy )
+    await submitDay( entry.date, closedBy.trim() )
     await refreshEntry()
   }
+
 
   const handlePrint = () =>
   {
     if ( !printRef.current ) return
-    const w = window.open( "", "", "width=380,height=900" )
+
+    const w = window.open( "", "_blank" )
     if ( !w ) return
+
+    w.document.open()
     w.document.write( `
-      <html>
-        <head>
-          <style>
-            body { font-family: monospace; font-size: 12px; }
-            table { width: 100%; border-collapse: collapse; }
-            td { padding: 4px; }
-            .right { text-align: right; }
-            .bold { font-weight: bold; }
-            .big { font-size: 14px; font-weight: 800; }
-            .line { border-top: 1px solid #000; }
-          </style>
-        </head>
-        <body>
-          ${ printRef.current.innerHTML }
-        </body>
-      </html>
-    ` )
+    <html>
+      <head>
+        <title>Print</title>
+        <style>
+          @page {
+            size: 80mm auto;
+            margin: 0;
+          }
+
+          body {
+            margin: 0;
+            padding: 0;
+            font-family: monospace;
+            font-size: 12px;
+          }
+
+          table {
+            width: 100%;
+            border-collapse: collapse;
+          }
+
+          td {
+            padding: 2px 0;
+          }
+
+          .right { text-align: right; }
+          .bold { font-weight: bold; }
+          .big { font-size: 14px; font-weight: 800; }
+          .line { border-top: 1px dashed #000; margin: 6px 0; }
+        </style>
+      </head>
+      <body onload="window.print(); window.close();">
+        ${ printRef.current.innerHTML }
+      </body>
+    </html>
+  `)
     w.document.close()
-    w.print()
   }
 
   /* ================= JSX ================= */
@@ -230,15 +295,7 @@ export default function ClosingPage ( {
   return (
     <div className="space-y-4">
 
-      {/* CLOSED BY */ }
-      <Card className="p-3">
-        <label className="text-sm font-semibold">Closed By</label>
-        <Input
-          value={ closedBy }
-          disabled={ isReadOnly }
-          onChange={ e => setClosedBy( e.target.value ) }
-        />
-      </Card>
+
 
       {/* CLOSING CASH */ }
       <Card className="p-4">
@@ -460,8 +517,39 @@ export default function ClosingPage ( {
         </table>
       </Card>
 
+      <Card className="p-3">
+        <label className="text-sm font-semibold">Closed By <span className="text-red-500">*</span></label>
+
+        { savedNames.length > 0 && (
+          <select
+            className="w-full border rounded px-2 py-1 mb-2"
+            disabled={ isReadOnly }
+            onChange={ e => setClosedBy( e.target.value ) }
+            value=""
+          >
+            <option value="">Select saved name</option>
+            { savedNames.map( name => (
+              <option key={ name } value={ name }>{ name }</option>
+            ) ) }
+          </select>
+        ) }
+
+        <Input
+          ref={ closedByRef }
+          value={ closedBy }
+          disabled={ isReadOnly }
+          onChange={ e => setClosedBy( e.target.value ) }
+          placeholder="type name"
+        />
+      </Card>
+
+
       {/* PRINT PREVIEW */ }
-      <Card ref={ printRef } className="p-3 text-sm">
+      {/* PRINT PREVIEW */ }
+      <Card
+        ref={ printRef }
+        className="receipt p-3 text-sm"
+      >
         <div className="center bold">Smart Mart & Smart Fashions</div>
         <div className="center bold">{ user.counterName }</div>
         <div className="center text-xs">{ entry.date }</div>
@@ -513,12 +601,14 @@ export default function ClosingPage ( {
 
         <table>
           <tbody>
-            { DENOMS.map( ( [ l, k, v ] ) =>
-              availableDenoms[ k ] > 0 ? (
-                <tr key={ k }>
-                  <td>{ l } × { availableDenoms[ k ] }</td>
+            { DENOMS.map( ( [ label, key, value ] ) =>
+              availableDenoms[ key ] > 0 ? (
+                <tr key={ key }>
+                  <td>
+                    { label } × { availableDenoms[ key ] }
+                  </td>
                   <td className="right">
-                    ₹{ ( availableDenoms[ k ] * v ).toFixed( 2 ) }
+                    ₹{ ( availableDenoms[ key ] * value ).toFixed( 2 ) }
                   </td>
                 </tr>
               ) : null
@@ -532,10 +622,11 @@ export default function ClosingPage ( {
 
         <div className="line" />
         <div className="flex justify-between bold">
-          <span>Closed By</span>
+          <span>Closed By </span>
           <span>{ closedBy || "-" }</span>
         </div>
       </Card>
+
 
 
 
@@ -593,3 +684,4 @@ export default function ClosingPage ( {
     </div>
   )
 }
+
