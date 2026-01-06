@@ -84,6 +84,7 @@ export interface DayEntry
 
   createdAt: Date | string
   updatedAt: Date | string
+  paymentRefNumber?: string
 }
 
 /* ================= CALCULATIONS ================= */

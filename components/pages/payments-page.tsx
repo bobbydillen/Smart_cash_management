@@ -9,6 +9,7 @@ import
   addPayment,
   deletePayment,
   updatePayment,
+  updatePaymentRef, // ✅ REQUIRED
 } from "@/app/actions/counter"
 import type { DayEntry, Payment } from "@/lib/types"
 import { Plus, Trash2, Pencil, Check, X } from "lucide-react"
@@ -16,7 +17,7 @@ import { Plus, Trash2, Pencil, Check, X } from "lucide-react"
 interface PaymentsPageProps
 {
   entry: DayEntry
-  refreshEntry: () => Promise<void> // kept for parent, NOT used here
+  refreshEntry: () => Promise<void> // ❌ NOT used here (by design)
   isReadOnly: boolean
 }
 
@@ -26,18 +27,30 @@ export default function PaymentsPage ( {
   isReadOnly,
 }: PaymentsPageProps )
 {
-
-  /* ================= LOCAL PAYMENTS STATE ================= */
+  /* ================= PAYMENTS STATE ================= */
 
   const [ payments, setPayments ] = useState<Payment[]>( entry.payments )
 
-  // Sync ONLY when entry/date changes
   useEffect( () =>
   {
     setPayments( entry.payments )
   }, [ entry.date, entry.payments ] )
 
-  /* ================= ADD FORM STATE ================= */
+  /* ================= PAYMENT REF STATE ================= */
+
+  const [ paymentRef, setPaymentRef ] = useState( "" )
+
+  // 🔒 SAFE one-time sync when date changes ONLY
+  useEffect( () =>
+  {
+    if ( entry.paymentRefNumber && !paymentRef )
+    {
+      setPaymentRef( entry.paymentRefNumber )
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ entry.date ] )
+
+  /* ================= ADD FORM ================= */
 
   const [ desc, setDesc ] = useState( "" )
   const [ amount, setAmount ] = useState( "" )
@@ -62,6 +75,22 @@ export default function PaymentsPage ( {
 
   const netMovement = totalIn - totalOut
 
+  /* ================= AUTOSAVE PAYMENT REF (NO REFRESH) ================= */
+
+  useEffect( () =>
+  {
+    if ( isReadOnly ) return
+    if ( !paymentRef.trim() ) return
+    if ( payments.length === 0 ) return
+
+    const timer = setTimeout( () =>
+    {
+      updatePaymentRef( entry.date, paymentRef.trim() )
+    }, 800 ) // ⏱ debounce
+
+    return () => clearTimeout( timer )
+  }, [ paymentRef, payments.length, isReadOnly, entry.date ] )
+
   /* ================= ACTIONS ================= */
 
   const handleAdd = async () =>
@@ -76,7 +105,6 @@ export default function PaymentsPage ( {
       type,
     }
 
-    // ✅ Optimistic UI
     setPayments( prev => [ ...prev, newPayment ] )
 
     try
@@ -84,7 +112,6 @@ export default function PaymentsPage ( {
       await addPayment( desc, amt, type, entry.date )
     } catch
     {
-      // rollback on failure
       setPayments( prev => prev.slice( 0, -1 ) )
       return
     }
@@ -99,8 +126,6 @@ export default function PaymentsPage ( {
     if ( !confirm( "Delete this entry?" ) ) return
 
     const removed = payments[ index ]
-
-    // optimistic remove
     setPayments( prev => prev.filter( ( _, i ) => i !== index ) )
 
     try
@@ -108,7 +133,6 @@ export default function PaymentsPage ( {
       await deletePayment( index, entry.date )
     } catch
     {
-      // rollback
       setPayments( prev =>
       {
         const copy = [ ...prev ]
@@ -141,7 +165,6 @@ export default function PaymentsPage ( {
       type: editType,
     }
 
-    // optimistic update
     setPayments( prev =>
       prev.map( ( p, i ) => ( i === editingIndex ? updated : p ) )
     )
@@ -157,7 +180,6 @@ export default function PaymentsPage ( {
       )
     } catch
     {
-      // rollback
       setPayments( entry.payments )
     }
 
@@ -320,6 +342,33 @@ export default function PaymentsPage ( {
             </div>
           </div>
         </div>
+
+        {/* PAYMENT REF */ }
+        { payments.length > 0 && (
+  <Card className="p-4 border border-orange-300 bg-orange-50 mt-6">
+    <label className="text-sm font-semibold">
+      Payment Entry Number
+    </label>
+
+    {isReadOnly ? (
+      <div className="mt-1 font-mono text-sm bg-white p-2 rounded border">
+        {entry.paymentRefNumber || "—"}
+      </div>
+    ) : (
+      <Input
+        value={paymentRef}
+        onChange={e => setPaymentRef(e.target.value)}
+        placeholder="Enter billing / payment reference number"
+      />
+    )}
+
+    <p className="text-xs text-muted-foreground mt-1">
+      Required if any payment IN or OUT is recorded
+    </p>
+  </Card>
+)}
+
+        
       </Card>
     </div>
   )

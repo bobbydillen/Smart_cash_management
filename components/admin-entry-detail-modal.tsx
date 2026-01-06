@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import type { DayEntry, DenominationCount } from "@/lib/types"
@@ -81,7 +81,6 @@ export default function AdminEntryDetailModal ( {
   const cashSales = calculateCashSales( entry.sales, isFashionBoth )
   const { totalIn, totalOut } = calculatePaymentSummary( entry.payments )
 
-  // ✅ FIXED TOTAL SALES (SAME AS ADMIN DASHBOARD)
   const totalSales =
     cashSales +
     ( isFashionBoth
@@ -200,29 +199,55 @@ export default function AdminEntryDetailModal ( {
               </span>
               <span>₹{ Math.abs( shortage ).toFixed( 2 ) }</span>
             </div>
+          </Card>
 
-            <div className="border-t pt-2">
-              <div className="font-semibold mb-1">Available Cash</div>
-              { DENOMS.map( ( [ l, k, v ] ) =>
-                availableDenoms[ k ] > 0 ? (
-                  <div key={ k } className="flex justify-between text-sm">
-                    <span>
-                      { l } × { availableDenoms[ k ] }
-                    </span>
-                    <span>₹{ ( availableDenoms[ k ] * v ).toFixed( 2 ) }</span>
-                  </div>
-                ) : null
-              ) }
-              <div className="flex justify-between font-bold border-t mt-1 pt-1">
-                <span>Total</span>
-                <span>₹{ availableCash.toFixed( 2 ) }</span>
+          {/* PAYMENTS */ }
+          <Card className="p-4 mt-4">
+            <h3 className="font-bold mb-3">Payments (IN / OUT)</h3>
+
+            {/* ✅ PAYMENT ENTRY NUMBER */ }
+            <div className="mb-4 p-3 rounded border bg-muted/40">
+              <div className="text-xs text-muted-foreground">
+                Payment Entry Number
+              </div>
+              <div className="font-semibold text-sm">
+                { entry.paymentRefNumber || "-" }
               </div>
             </div>
 
-            <div className="flex justify-between border-t pt-2 font-bold">
-              <span>Closed By</span>
-              <span>{ entry.closedBy || "-" }</span>
-            </div>
+            { entry.payments.length === 0 ? (
+              <div className="text-sm text-muted-foreground">
+                No payment entries recorded.
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2 text-sm">
+                  { entry.payments.map( ( p, i ) => (
+                    <div
+                      key={ i }
+                      className={ `flex justify-between p-2 rounded ${ ( p.type ?? "OUT" ) === "IN"
+                        ? "bg-green-50"
+                        : "bg-red-50"
+                        }` }
+                    >
+                      <div>
+                        <div className="font-medium">
+                          { ( p.type ?? "OUT" ) === "IN" ? "➕ IN" : "➖ OUT" } —{ " " }
+                          { p.description }
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          { new Date( p.time ).toLocaleTimeString( "en-IN" ) }
+                        </div>
+                      </div>
+
+                      <div className="font-bold">
+                        ₹{ p.amount.toFixed( 2 ) }
+                      </div>
+                    </div>
+                  ) ) }
+                </div>
+              </>
+            ) }
           </Card>
 
           {/* OPENING CASH OVERRIDE */ }
@@ -233,7 +258,9 @@ export default function AdminEntryDetailModal ( {
                 type="number"
                 className="border rounded px-3 py-1 w-full"
                 value={ openingCash }
-                onChange={ e => setOpeningCash( Number( e.target.value ) || 0 ) }
+                onChange={ e =>
+                  setOpeningCash( Number( e.target.value ) || 0 )
+                }
               />
               <Button onClick={ handleOverrideOpening }>Update</Button>
             </div>

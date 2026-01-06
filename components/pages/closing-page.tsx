@@ -209,6 +209,14 @@ export default function ClosingPage ( {
 
   const handleSubmit = async () =>
   {
+    if ( entry.payments.length > 0 && !entry.paymentRefNumber )
+    {
+      alert(
+        "❌ Payment Entry Number is required because payments were recorded."
+      )
+      return
+    }
+
     // ❌ VALIDATION: Closed By is mandatory
     if ( !closedBy || !closedBy.trim() )
     {
@@ -246,49 +254,69 @@ export default function ClosingPage ( {
   {
     if ( !printRef.current ) return
 
-    const w = window.open( "", "_blank" )
+    const w = window.open( "", "_blank", "width=400,height=600" )
     if ( !w ) return
 
     w.document.open()
     w.document.write( `
-    <html>
-      <head>
-        <title>Print</title>
-        <style>
-          @page {
-            size: 80mm auto;
-            margin: 0;
-          }
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Print</title>
+  <style>
+    * { box-sizing: border-box; }
 
-          body {
-            margin: 0;
-            padding: 0;
-            font-family: monospace;
-            font-size: 12px;
-          }
+    @page {
+      size: 80mm 150mm; /* 15 cm height */
+      margin: 0;
+    }
 
-          table {
-            width: 100%;
-            border-collapse: collapse;
-          }
+    html, body {
+      width: 80mm;
+      height: 150mm;
+      margin: 0;
+      padding: 0;
+      font-family: monospace;
+      font-size: 12px;
+      overflow: hidden;
+    }
 
-          td {
-            padding: 2px 0;
-          }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
 
-          .right { text-align: right; }
-          .bold { font-weight: bold; }
-          .big { font-size: 14px; font-weight: 800; }
-          .line { border-top: 1px dashed #000; margin: 6px 0; }
-        </style>
-      </head>
-      <body onload="window.print(); window.close();">
-        ${ printRef.current.innerHTML }
-      </body>
-    </html>
+    td {
+      padding: 2px 0;
+    }
+
+    .right { text-align: right; }
+    .bold { font-weight: bold; }
+    .big { font-size: 14px; font-weight: 800; }
+    .line {
+      border-top: 1px dashed #000;
+      margin: 6px 0;
+    }
+  </style>
+</head>
+
+<body>
+  ${ printRef.current.innerHTML }
+
+  <script>
+    window.onload = function () {
+      setTimeout(() => {
+        window.print();
+        window.close();
+      }, 200);
+    };
+  </script>
+</body>
+</html>
   `)
     w.document.close()
   }
+
 
   /* ================= JSX ================= */
 

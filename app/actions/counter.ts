@@ -66,14 +66,45 @@ function calculateDenominationTotal ( d: DenominationCount ): number
 function serializeEntry ( entry: any ): DayEntry
 {
     return {
-        ...entry,
         _id: entry._id?.toString(),
+
+        counterName: entry.counterName,
+        date: entry.date,
+
+        openingCash: entry.openingCash,
+        openingDenominations: entry.openingDenominations,
+        openingVerified: entry.openingVerified,
+        openingVerifiedAt: entry.openingVerifiedAt,
+
         payments:
             entry.payments?.map( ( p: any ) => ( {
-                ...p,
-                time: p.time instanceof Date ? p.time.toISOString() : p.time,
+                description: p.description,
+                amount: p.amount,
                 type: p.type || "OUT",
+                time:
+                    p.time instanceof Date
+                        ? p.time.toISOString()
+                        : p.time,
             } ) ) || [],
+
+        paymentRefNumber: entry.paymentRefNumber || "", // ✅ FIXED
+
+        sales: entry.sales,
+
+        closingDenominations: entry.closingDenominations,
+        nextDayOpeningCash: entry.nextDayOpeningCash,
+        nextDayOpeningDenominations: entry.nextDayOpeningDenominations,
+
+        status: entry.status,
+        closedBy: entry.closedBy,
+
+        submittedExpectedCash: entry.submittedExpectedCash,
+        submittedActualCash: entry.submittedActualCash,
+        submittedShortage: entry.submittedShortage,
+
+        createdAt: entry.createdAt,
+        updatedAt: entry.updatedAt,
+        submittedAt: entry.submittedAt,
     }
 }
 
@@ -566,4 +597,30 @@ export async function getOpeningCashForDate ( date: string )
                 )
                 : 0 ),
     }
+}
+
+
+export async function updatePaymentRef (
+    date: string,
+    ref: string
+)
+{
+    const user = await getSession()
+    if ( !user || user.role !== "counter" ) return
+
+    const db = await getDatabase()
+
+    await db.collection( "entries" ).updateOne(
+        {
+            counterName: user.counterName!,
+            date,
+            status: "open",
+        },
+        {
+            $set: {
+                paymentRefNumber: ref,
+                updatedAt: new Date(),
+            },
+        }
+    )
 }
