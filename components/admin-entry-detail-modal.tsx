@@ -179,6 +179,10 @@ export default function AdminEntryDetailModal ( {
 
             <Row label="Next Day Opening" value={ nextDayTotal } />
 
+            <Divider />
+
+            <Row label="Total Available Cash" value={ availableCash } bold />
+
             <div className="font-semibold pt-2">Available Cash Denominations</div>
 
             { DENOMS.map( ( [ label, key, value ] ) =>
@@ -190,9 +194,9 @@ export default function AdminEntryDetailModal ( {
               ) : null
             ) }
 
-            <Divider />
 
-            <Row label="Total Available Cash" value={ availableCash } bold />
+
+
           </Card>
 
           {/* PAYMENTS */ }
