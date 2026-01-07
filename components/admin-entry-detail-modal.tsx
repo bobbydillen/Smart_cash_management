@@ -81,15 +81,17 @@ export default function AdminEntryDetailModal ( {
   const cashSales = calculateCashSales( entry.sales, isFashionBoth )
   const { totalIn, totalOut } = calculatePaymentSummary( entry.payments )
 
-  const totalSales =
-    cashSales +
-    ( isFashionBoth
-      ? ( entry.sales.martCardUpi || 0 ) +
-      ( entry.sales.fashionCardUpi || 0 ) +
-      ( entry.sales.martCredit || 0 ) +
-      ( entry.sales.fashionCredit || 0 )
-      : ( entry.sales.cardUpiSales || 0 ) +
-      ( entry.sales.creditSales || 0 ) )
+  const cardUpiSales = isFashionBoth
+    ? ( entry.sales.martCardUpi || 0 ) +
+    ( entry.sales.fashionCardUpi || 0 )
+    : ( entry.sales.cardUpiSales || 0 )
+
+  const creditSales = isFashionBoth
+    ? ( entry.sales.martCredit || 0 ) +
+    ( entry.sales.fashionCredit || 0 )
+    : ( entry.sales.creditSales || 0 )
+
+  const totalSales = cashSales + cardUpiSales + creditSales
 
   const expectedCash = calculateExpectedCashWithInOut(
     openingCash,
@@ -138,52 +140,25 @@ export default function AdminEntryDetailModal ( {
 
         <div className="p-6 space-y-6">
 
-          {/* SUMMARY CARD */ }
+          {/* DAY SUMMARY */ }
           <Card className="p-6 space-y-2">
             <h3 className="text-xl font-bold mb-2">Day Summary</h3>
 
-            <div className="flex justify-between">
-              <span>Opening Cash</span>
-              <span>₹{ openingCash.toFixed( 2 ) }</span>
-            </div>
+            <Row label="Opening Cash" value={ openingCash } />
+            <Row label="Total Sales" value={ totalSales } bold />
+            <Row label="Cash Sales" value={ cashSales } />
+            <Row label="Card / UPI Sales" value={ cardUpiSales } color="text-blue-600" />
+            <Row label="Credit Sales" value={ creditSales } color="text-purple-600" />
+            <Row label="Payments In" value={ totalIn } color="text-green-600" />
+            <Row label="Payments Out" value={ totalOut } color="text-red-600" />
 
-            <div className="flex justify-between font-semibold">
-              <span>Total Sales</span>
-              <span>₹{ totalSales.toFixed( 2 ) }</span>
-            </div>
+            <Divider />
 
-            <div className="flex justify-between">
-              <span>Cash Sales</span>
-              <span>₹{ cashSales.toFixed( 2 ) }</span>
-            </div>
-
-            <div className="flex justify-between text-green-600">
-              <span>Payments In</span>
-              <span>₹{ totalIn.toFixed( 2 ) }</span>
-            </div>
-
-            <div className="flex justify-between text-red-600">
-              <span>Payments Out</span>
-              <span>₹{ totalOut.toFixed( 2 ) }</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span>Next Day Opening</span>
-              <span>₹{ nextDayTotal.toFixed( 2 ) }</span>
-            </div>
-
-            <div className="border-t pt-2 flex justify-between font-bold">
-              <span>Expected Cash</span>
-              <span>₹{ expectedCash.toFixed( 2 ) }</span>
-            </div>
-
-            <div className="flex justify-between font-bold">
-              <span>Actual Cash</span>
-              <span>₹{ actualCash.toFixed( 2 ) }</span>
-            </div>
+            <Row label="Expected Cash" value={ expectedCash } bold />
+            <Row label="Actual Cash" value={ actualCash } bold />
 
             <div
-              className={ `border-t pt-2 flex justify-between font-extrabold ${ shortage > 0
+              className={ `flex justify-between font-extrabold ${ shortage > 0
                 ? "text-red-600"
                 : shortage < 0
                   ? "text-green-600"
@@ -199,13 +174,31 @@ export default function AdminEntryDetailModal ( {
               </span>
               <span>₹{ Math.abs( shortage ).toFixed( 2 ) }</span>
             </div>
+
+            <Divider />
+
+            <Row label="Next Day Opening" value={ nextDayTotal } />
+
+            <div className="font-semibold pt-2">Available Cash Denominations</div>
+
+            { DENOMS.map( ( [ label, key, value ] ) =>
+              availableDenoms[ key ] > 0 ? (
+                <div key={ key } className="flex justify-between text-sm">
+                  <span>{ label } × { availableDenoms[ key ] }</span>
+                  <span>₹{ ( availableDenoms[ key ] * value ).toFixed( 2 ) }</span>
+                </div>
+              ) : null
+            ) }
+
+            <Divider />
+
+            <Row label="Total Available Cash" value={ availableCash } bold />
           </Card>
 
           {/* PAYMENTS */ }
-          <Card className="p-4 mt-4">
+          <Card className="p-4">
             <h3 className="font-bold mb-3">Payments (IN / OUT)</h3>
 
-            {/* ✅ PAYMENT ENTRY NUMBER */ }
             <div className="mb-4 p-3 rounded border bg-muted/40">
               <div className="text-xs text-muted-foreground">
                 Payment Entry Number
@@ -220,33 +213,27 @@ export default function AdminEntryDetailModal ( {
                 No payment entries recorded.
               </div>
             ) : (
-              <>
-                <div className="space-y-2 text-sm">
-                  { entry.payments.map( ( p, i ) => (
-                    <div
-                      key={ i }
-                      className={ `flex justify-between p-2 rounded ${ ( p.type ?? "OUT" ) === "IN"
-                        ? "bg-green-50"
-                        : "bg-red-50"
-                        }` }
-                    >
-                      <div>
-                        <div className="font-medium">
-                          { ( p.type ?? "OUT" ) === "IN" ? "➕ IN" : "➖ OUT" } —{ " " }
-                          { p.description }
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          { new Date( p.time ).toLocaleTimeString( "en-IN" ) }
-                        </div>
+              <div className="space-y-2 text-sm">
+                { entry.payments.map( ( p, i ) => (
+                  <div
+                    key={ i }
+                    className={ `flex justify-between p-2 rounded ${ ( p.type ?? "OUT" ) === "IN"
+                      ? "bg-green-50"
+                      : "bg-red-50"
+                      }` }
+                  >
+                    <div>
+                      <div className="font-medium">
+                        { ( p.type ?? "OUT" ) === "IN" ? "➕ IN" : "➖ OUT" } — { p.description }
                       </div>
-
-                      <div className="font-bold">
-                        ₹{ p.amount.toFixed( 2 ) }
+                      <div className="text-xs text-muted-foreground">
+                        { new Date( p.time ).toLocaleTimeString( "en-IN" ) }
                       </div>
                     </div>
-                  ) ) }
-                </div>
-              </>
+                    <div className="font-bold">₹{ p.amount.toFixed( 2 ) }</div>
+                  </div>
+                ) ) }
+              </div>
             ) }
           </Card>
 
@@ -258,9 +245,7 @@ export default function AdminEntryDetailModal ( {
                 type="number"
                 className="border rounded px-3 py-1 w-full"
                 value={ openingCash }
-                onChange={ e =>
-                  setOpeningCash( Number( e.target.value ) || 0 )
-                }
+                onChange={ e => setOpeningCash( Number( e.target.value ) || 0 ) }
               />
               <Button onClick={ handleOverrideOpening }>Update</Button>
             </div>
@@ -270,4 +255,31 @@ export default function AdminEntryDetailModal ( {
       </div>
     </div>
   )
+}
+
+/* ================= HELPERS ================= */
+
+function Row ( {
+  label,
+  value,
+  bold = false,
+  color = "",
+}: {
+  label: string
+  value: number
+  bold?: boolean
+  color?: string
+} )
+{
+  return (
+    <div className={ `flex justify-between ${ bold ? "font-bold" : "" } ${ color }` }>
+      <span>{ label }</span>
+      <span>₹{ value.toFixed( 2 ) }</span>
+    </div>
+  )
+}
+
+function Divider ()
+{
+  return <div className="border-t my-2" />
 }
