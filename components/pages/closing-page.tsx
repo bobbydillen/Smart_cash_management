@@ -169,6 +169,7 @@ export default function ClosingPage ( {
   }, [ entry.date ] )
 
   /* ================= CALCULATIONS ================= */
+  /* ================= CALCULATIONS ================= */
 
   const isFashionBoth = entry.counterName === "Smart Fashion (Both)"
   const cashSales = calculateCashSales( entry.sales, isFashionBoth )
@@ -183,10 +184,49 @@ export default function ClosingPage ( {
   const actualCash = calculateClosingCash( closing )
   const nextDayTotal = calculateClosingCash( nextDay )
 
+  /* ✅ REQUIRED */
   const availableDenoms = subtractDenoms( closing, nextDay )
   const availableCash = calculateClosingCash( availableDenoms )
 
+  /* ✅ REQUIRED */
   const shortage = expectedCash - actualCash
+
+  /* ================= SALES BREAKUP FOR PRINT ================= */
+
+  // Smart Mart
+  const martTotalSales = entry.sales.martTotalSales ?? 0
+  const martCardSales = entry.sales.martCardUpi ?? 0
+  const martCreditSales = entry.sales.martCredit ?? 0
+  const martCashSales =
+    martTotalSales - martCardSales - martCreditSales
+
+  // Smart Fashion
+  const fashionTotalSales = entry.sales.fashionTotalSales ?? 0
+  const fashionCardSales = entry.sales.fashionCardUpi ?? 0
+  const fashionCreditSales = entry.sales.fashionCredit ?? 0
+  const fashionCashSales =
+    fashionTotalSales - fashionCardSales - fashionCreditSales
+
+  // Overall totals
+  const totalCashSales = isFashionBoth
+    ? martCashSales + fashionCashSales
+    : cashSales
+
+  const totalCardSales = isFashionBoth
+    ? martCardSales + fashionCardSales
+    : entry.sales.cardUpiSales ?? 0
+
+  const totalCreditSales = isFashionBoth
+    ? martCreditSales + fashionCreditSales
+    : entry.sales.creditSales ?? 0
+
+  const totalSalesForPrint = isFashionBoth
+    ? martTotalSales + fashionTotalSales
+    : entry.sales.totalSales ?? 0
+
+
+
+
 
   /* ================= ACTIONS ================= */
 
@@ -572,12 +612,18 @@ export default function ClosingPage ( {
       </Card>
 
 
+
+
+
+
+
+
+
+
       {/* PRINT PREVIEW */ }
       {/* PRINT PREVIEW */ }
-      <Card
-        ref={ printRef }
-        className="receipt p-3 text-sm"
-      >
+      {/* PRINT PREVIEW */ }
+      <Card ref={ printRef } className="receipt p-3 text-sm">
         <div className="center bold">Smart Mart & Smart Fashions</div>
         <div className="center bold">{ user.counterName }</div>
         <div className="center text-xs">{ entry.date }</div>
@@ -589,16 +635,112 @@ export default function ClosingPage ( {
               <td>Opening Cash</td>
               <td className="right">₹{ openingCash.toFixed( 2 ) }</td>
             </tr>
-            <tr>
+
+            <tr className="line" />
+
+            <tr className="bold">
               <td>Total Sales</td>
               <td className="right">
-                ₹{ ( cashSales + totalIn + totalOut ).toFixed( 2 ) }
+                ₹{ totalSalesForPrint.toFixed( 2 ) }
               </td>
             </tr>
-            <tr>
-              <td>Cash Sales</td>
-              <td className="right">₹{ cashSales.toFixed( 2 ) }</td>
-            </tr>
+
+            {/* SMART FASHION BOTH */ }
+            { isFashionBoth ? (
+              <>
+                <tr className="bold">
+                  <td colSpan={ 2 }>Smart Mart</td>
+                </tr>
+                <tr>
+                  <td>Total Sales</td>
+                  <td className="right">₹{ martTotalSales.toFixed( 2 ) }</td>
+                </tr>
+                <tr>
+                  <td>Cash Sales</td>
+                  <td className="right">₹{ martCashSales.toFixed( 2 ) }</td>
+                </tr>
+                <tr>
+                  <td>Card / UPI</td>
+                  <td className="right">₹{ martCardSales.toFixed( 2 ) }</td>
+                </tr>
+                <tr>
+                  <td>Credit</td>
+                  <td className="right">₹{ martCreditSales.toFixed( 2 ) }</td>
+                </tr>
+
+                <tr className="bold">
+                  <td colSpan={ 2 }>Smart Fashion</td>
+                </tr>
+                <tr>
+                  <td>Total Sales</td>
+                  <td className="right">₹{ fashionTotalSales.toFixed( 2 ) }</td>
+                </tr>
+                <tr>
+                  <td>Cash Sales</td>
+                  <td className="right">₹{ fashionCashSales.toFixed( 2 ) }</td>
+                </tr>
+                <tr>
+                  <td>Card / UPI</td>
+                  <td className="right">₹{ fashionCardSales.toFixed( 2 ) }</td>
+                </tr>
+                <tr>
+                  <td>Credit</td>
+                  <td className="right">₹{ fashionCreditSales.toFixed( 2 ) }</td>
+                </tr>
+
+                <tr className="bold">
+                  <td>TOTAL CASH SALES</td>
+                  <td className="right">₹{ totalCashSales.toFixed( 2 ) }</td>
+                </tr>
+                <tr className="bold">
+                  <td>TOTAL CARD SALES</td>
+                  <td className="right">₹{ totalCardSales.toFixed( 2 ) }</td>
+                </tr>
+                <tr className="bold">
+                  <td>TOTAL CREDIT SALES</td>
+                  <td className="right">₹{ totalCreditSales.toFixed( 2 ) }</td>
+                </tr>
+              </>
+            ) : (
+              <>
+                <tr>
+                  <td>Cash Sales</td>
+                  <td className="right">₹{ cashSales.toFixed( 2 ) }</td>
+                </tr>
+                <tr>
+                  <td>Card / UPI Sales</td>
+                  <td className="right">
+                    ₹{ ( entry.sales.cardUpiSales ?? 0 ).toFixed( 2 ) }
+                  </td>
+                </tr>
+                <tr>
+                  <td>Credit Sales</td>
+                  <td className="right">
+                    ₹{ ( entry.sales.creditSales ?? 0 ).toFixed( 2 ) }
+                  </td>
+                </tr>
+
+                <tr className="bold">
+                  <td>TOTAL CASH SALES</td>
+                  <td className="right">₹{ cashSales.toFixed( 2 ) }</td>
+                </tr>
+                <tr className="bold">
+                  <td>TOTAL CARD SALES</td>
+                  <td className="right">
+                    ₹{ ( entry.sales.cardUpiSales ?? 0 ).toFixed( 2 ) }
+                  </td>
+                </tr>
+                <tr className="bold">
+                  <td>TOTAL CREDIT SALES</td>
+                  <td className="right">
+                    ₹{ ( entry.sales.creditSales ?? 0 ).toFixed( 2 ) }
+                  </td>
+                </tr>
+              </>
+            ) }
+
+            <tr className="line" />
+
             <tr>
               <td>Payments IN</td>
               <td className="right">₹{ totalIn.toFixed( 2 ) }</td>
@@ -607,6 +749,14 @@ export default function ClosingPage ( {
               <td>Payments OUT</td>
               <td className="right">₹{ totalOut.toFixed( 2 ) }</td>
             </tr>
+
+            <tr>
+              <td>Payment Entry No</td>
+              <td className="right">{ entry.paymentRefNumber || "-" }</td>
+            </tr>
+
+            <tr className="line" />
+
             <tr className="bold">
               <td>Expected Cash</td>
               <td className="right">₹{ expectedCash.toFixed( 2 ) }</td>
@@ -621,6 +771,18 @@ export default function ClosingPage ( {
                 ₹{ Math.abs( shortage ).toFixed( 2 ) }
               </td>
             </tr>
+
+            <tr className="line" />
+
+            <tr className="bold">
+              <td>Next Day Opening</td>
+              <td className="right">₹{ nextDayTotal.toFixed( 2 ) }</td>
+            </tr>
+
+            <tr className="bold">
+              <td>Total Available Cash</td>
+              <td className="right">₹{ availableCash.toFixed( 2 ) }</td>
+            </tr>
           </tbody>
         </table>
 
@@ -632,9 +794,7 @@ export default function ClosingPage ( {
             { DENOMS.map( ( [ label, key, value ] ) =>
               availableDenoms[ key ] > 0 ? (
                 <tr key={ key }>
-                  <td>
-                    { label } × { availableDenoms[ key ] }
-                  </td>
+                  <td>{ label } × { availableDenoms[ key ] }</td>
                   <td className="right">
                     ₹{ ( availableDenoms[ key ] * value ).toFixed( 2 ) }
                   </td>
@@ -650,50 +810,10 @@ export default function ClosingPage ( {
 
         <div className="line" />
         <div className="flex justify-between bold">
-          <span>Closed By </span>
+          <span>Closed By</span>
           <span>{ closedBy || "-" }</span>
         </div>
       </Card>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

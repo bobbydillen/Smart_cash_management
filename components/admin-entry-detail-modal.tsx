@@ -81,17 +81,36 @@ export default function AdminEntryDetailModal ( {
   const cashSales = calculateCashSales( entry.sales, isFashionBoth )
   const { totalIn, totalOut } = calculatePaymentSummary( entry.payments )
 
-  const cardUpiSales = isFashionBoth
-    ? ( entry.sales.martCardUpi || 0 ) +
-    ( entry.sales.fashionCardUpi || 0 )
-    : ( entry.sales.cardUpiSales || 0 )
+  /* ===== SALES BREAKUP ===== */
 
-  const creditSales = isFashionBoth
-    ? ( entry.sales.martCredit || 0 ) +
-    ( entry.sales.fashionCredit || 0 )
-    : ( entry.sales.creditSales || 0 )
+  const martTotalSales = entry.sales.martTotalSales ?? 0
+  const martCardSales = entry.sales.martCardUpi ?? 0
+  const martCreditSales = entry.sales.martCredit ?? 0
+  const martCashSales = martTotalSales - martCardSales - martCreditSales
 
-  const totalSales = cashSales + cardUpiSales + creditSales
+  const fashionTotalSales = entry.sales.fashionTotalSales ?? 0
+  const fashionCardSales = entry.sales.fashionCardUpi ?? 0
+  const fashionCreditSales = entry.sales.fashionCredit ?? 0
+  const fashionCashSales =
+    fashionTotalSales - fashionCardSales - fashionCreditSales
+
+  const totalSalesForAdmin = isFashionBoth
+    ? martTotalSales + fashionTotalSales
+    : entry.sales.totalSales ?? 0
+
+  const totalCashSales = isFashionBoth
+    ? martCashSales + fashionCashSales
+    : cashSales
+
+  const totalCardSales = isFashionBoth
+    ? martCardSales + fashionCardSales
+    : entry.sales.cardUpiSales ?? 0
+
+  const totalCreditSales = isFashionBoth
+    ? martCreditSales + fashionCreditSales
+    : entry.sales.creditSales ?? 0
+
+  /* ===== CASH RECONCILIATION ===== */
 
   const expectedCash = calculateExpectedCashWithInOut(
     openingCash,
@@ -141,36 +160,57 @@ export default function AdminEntryDetailModal ( {
         <div className="p-6 space-y-6">
 
           {/* DAY SUMMARY */ }
-          <Card className="p-6 space-y-2">
-            <h3 className="text-xl font-bold mb-2">Day Summary</h3>
+          <Card className="p-6 space-y-3">
+            <h3 className="text-xl font-bold">Day Summary</h3>
 
             <Row label="Opening Cash" value={ openingCash } />
-            <Row label="Total Sales" value={ totalSales } bold />
-            <Row label="Cash Sales" value={ cashSales } />
-            <Row label="Card / UPI Sales" value={ cardUpiSales } color="text-blue-600" />
-            <Row label="Credit Sales" value={ creditSales } color="text-purple-600" />
-            <Row label="Payments In" value={ totalIn } color="text-green-600" />
-            <Row label="Payments Out" value={ totalOut } color="text-red-600" />
+            <Row label="Total Sales" value={ totalSalesForAdmin } bold />
+
+            { isFashionBoth ? (
+              <>
+                <Divider />
+                <div className="font-semibold">Smart Mart</div>
+                <Row label="Cash Sales" value={ martCashSales } />
+                <Row label="Card / UPI Sales" value={ martCardSales } />
+                <Row label="Credit Sales" value={ martCreditSales } />
+
+                <Divider />
+                <div className="font-semibold">Smart Fashion</div>
+                <Row label="Cash Sales" value={ fashionCashSales } />
+                <Row label="Card / UPI Sales" value={ fashionCardSales } />
+                <Row label="Credit Sales" value={ fashionCreditSales } />
+
+                <Divider />
+                <Row label="TOTAL CASH SALES" value={ totalCashSales } bold />
+                <Row label="TOTAL CARD SALES" value={ totalCardSales } bold />
+                <Row label="TOTAL CREDIT SALES" value={ totalCreditSales } bold />
+              </>
+            ) : (
+              <>
+                <Row label="Cash Sales" value={ cashSales } />
+                <Row label="Card / UPI Sales" value={ totalCardSales } />
+                <Row label="Credit Sales" value={ totalCreditSales } />
+              </>
+            ) }
+
+            <Divider />
+
+            <Row label="Payments IN" value={ totalIn } />
+            <Row label="Payments OUT" value={ totalOut } />
 
             <Divider />
 
             <Row label="Expected Cash" value={ expectedCash } bold />
             <Row label="Actual Cash" value={ actualCash } bold />
 
-            <div
-              className={ `flex justify-between font-extrabold ${ shortage > 0
-                ? "text-red-600"
-                : shortage < 0
-                  ? "text-green-600"
-                  : ""
-                }` }
-            >
+            <div className={ `flex justify-between font-bold ${ shortage > 0
+              ? "text-red-600"
+              : shortage < 0
+                ? "text-green-600"
+                : ""
+              }` }>
               <span>
-                { shortage > 0
-                  ? "SHORTAGE"
-                  : shortage < 0
-                    ? "EXCESS"
-                    : "BALANCED" }
+                { shortage > 0 ? "SHORTAGE" : shortage < 0 ? "EXCESS" : "BALANCED" }
               </span>
               <span>₹{ Math.abs( shortage ).toFixed( 2 ) }</span>
             </div>
@@ -178,9 +218,6 @@ export default function AdminEntryDetailModal ( {
             <Divider />
 
             <Row label="Next Day Opening" value={ nextDayTotal } />
-
-            <Divider />
-
             <Row label="Total Available Cash" value={ availableCash } bold />
 
             <div className="font-semibold pt-2">Available Cash Denominations</div>
@@ -193,21 +230,17 @@ export default function AdminEntryDetailModal ( {
                 </div>
               ) : null
             ) }
-
-
-
-
           </Card>
 
-          {/* PAYMENTS */ }
-          <Card className="p-4">
-            <h3 className="font-bold mb-3">Payments (IN / OUT)</h3>
+          {/* PAYMENTS – SEPARATE CARD */ }
+          <Card className="p-6 space-y-4">
+            <h3 className="text-lg font-bold">Payments (IN / OUT)</h3>
 
-            <div className="mb-4 p-3 rounded border bg-muted/40">
+            <div className="rounded border bg-muted/40 p-3">
               <div className="text-xs text-muted-foreground">
                 Payment Entry Number
               </div>
-              <div className="font-semibold text-sm">
+              <div className="font-mono font-semibold">
                 { entry.paymentRefNumber || "-" }
               </div>
             </div>
@@ -217,31 +250,51 @@ export default function AdminEntryDetailModal ( {
                 No payment entries recorded.
               </div>
             ) : (
-              <div className="space-y-2 text-sm">
-                { entry.payments.map( ( p, i ) => (
-                  <div
-                    key={ i }
-                    className={ `flex justify-between p-2 rounded ${ ( p.type ?? "OUT" ) === "IN"
-                      ? "bg-green-50"
-                      : "bg-red-50"
-                      }` }
-                  >
-                    <div>
-                      <div className="font-medium">
-                        { ( p.type ?? "OUT" ) === "IN" ? "➕ IN" : "➖ OUT" } — { p.description }
+              <div className="space-y-2">
+                { entry.payments.map( ( p, i ) =>
+                {
+                  const type = p.type ?? "OUT"
+                  return (
+                    <div
+                      key={ i }
+                      className={ `flex justify-between items-start p-3 rounded ${ type === "IN" ? "bg-green-50" : "bg-red-50"
+                        }` }
+                    >
+                      <div>
+                        <div className="font-medium">
+                          { type === "IN" ? "➕ IN" : "➖ OUT" } — { p.description }
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          { new Date( p.time ).toLocaleTimeString( "en-IN" ) }
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        { new Date( p.time ).toLocaleTimeString( "en-IN" ) }
+                      <div className="font-bold">
+                        ₹{ p.amount.toFixed( 2 ) }
                       </div>
                     </div>
-                    <div className="font-bold">₹{ p.amount.toFixed( 2 ) }</div>
-                  </div>
-                ) ) }
+                  )
+                } ) }
               </div>
             ) }
+
+            <div className="grid grid-cols-2 gap-4 pt-3 border-t">
+              <div className="text-green-700 font-semibold">
+                Payments IN<br />₹{ totalIn.toFixed( 2 ) }
+              </div>
+              <div className="text-red-700 font-semibold text-right">
+                Payments OUT<br />₹{ totalOut.toFixed( 2 ) }
+              </div>
+            </div>
+
+            <Divider />
+
+            <div className="flex justify-between font-semibold">
+              <span>Closed By</span>
+              <span>{ entry.closedBy || "-" }</span>
+            </div>
           </Card>
 
-          {/* OPENING CASH OVERRIDE */ }
+          {/* OVERRIDE OPENING CASH */ }
           <Card className="p-6">
             <h3 className="text-lg font-bold mb-2">Override Opening Cash</h3>
             <div className="flex gap-3">
@@ -249,7 +302,9 @@ export default function AdminEntryDetailModal ( {
                 type="number"
                 className="border rounded px-3 py-1 w-full"
                 value={ openingCash }
-                onChange={ e => setOpeningCash( Number( e.target.value ) || 0 ) }
+                onChange={ e =>
+                  setOpeningCash( Number( e.target.value ) || 0 )
+                }
               />
               <Button onClick={ handleOverrideOpening }>Update</Button>
             </div>
@@ -267,16 +322,14 @@ function Row ( {
   label,
   value,
   bold = false,
-  color = "",
 }: {
   label: string
   value: number
   bold?: boolean
-  color?: string
 } )
 {
   return (
-    <div className={ `flex justify-between ${ bold ? "font-bold" : "" } ${ color }` }>
+    <div className={ `flex justify-between ${ bold ? "font-bold" : "" }` }>
       <span>{ label }</span>
       <span>₹{ value.toFixed( 2 ) }</span>
     </div>
