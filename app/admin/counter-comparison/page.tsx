@@ -93,10 +93,82 @@ export default function CounterComparisonPage ()
         return Array.from( map.values() )
     }, [ entries ] )
 
+    /* ================= GRAND TOTAL ================= */
+
+    const totals = useMemo( () =>
+    {
+        return uniqueEntries.reduce(
+            ( acc, entry ) =>
+            {
+                const isBoth = entry.counterName === "Smart Fashion (Both)"
+
+                const cashSales = calculateCashSales( entry.sales, isBoth )
+                const { totalIn, totalOut } = calculatePaymentSummary( entry.payments )
+
+                const card = isBoth
+                    ? ( entry.sales.martCardUpi || 0 ) + ( entry.sales.fashionCardUpi || 0 )
+                    : entry.sales.cardUpiSales || 0
+
+                const credit = isBoth
+                    ? ( entry.sales.martCredit || 0 ) + ( entry.sales.fashionCredit || 0 )
+                    : entry.sales.creditSales || 0
+
+                const expected = calculateExpectedCashWithInOut(
+                    entry.openingCash || 0,
+                    cashSales,
+                    entry.payments
+                )
+
+                const actual = calculateClosingCash( entry.closingDenominations )
+                const diff = expected - actual
+
+                const nextDay = calculateClosingCash(
+                    entry.nextDayOpeningDenominations || EMPTY_DENOMS
+                )
+
+                const available = calculateClosingCash(
+                    subtractDenoms(
+                        entry.closingDenominations,
+                        entry.nextDayOpeningDenominations
+                    )
+                )
+
+                acc.opening += entry.openingCash || 0
+                acc.totalSales += cashSales + card + credit
+                acc.cash += cashSales
+                acc.card += card
+                acc.credit += credit
+                acc.in += totalIn
+                acc.out += totalOut
+                acc.expected += expected
+                acc.actual += actual
+                acc.diff += diff
+                acc.nextDay += nextDay
+                acc.available += available
+
+                return acc
+            },
+            {
+                opening: 0,
+                totalSales: 0,
+                cash: 0,
+                card: 0,
+                credit: 0,
+                in: 0,
+                out: 0,
+                expected: 0,
+                actual: 0,
+                diff: 0,
+                nextDay: 0,
+                available: 0,
+            }
+        )
+    }, [ uniqueEntries ] )
+
     return (
         <div className="w-full min-h-screen bg-muted/40 p-6 print:p-0">
             <Card className="w-full p-6 print:p-0 print:shadow-none print:border-none">
-                {/* HEADER (SCREEN ONLY) */ }
+                {/* HEADER */ }
                 <div className="flex justify-between mb-6 print:hidden">
                     <h2 className="text-2xl font-bold">Counter Comparison</h2>
                     <div className="flex gap-3">
@@ -112,30 +184,24 @@ export default function CounterComparisonPage ()
                     </div>
                 </div>
 
-                {/* PRINT HEADER */ }
-                <div className="hidden print:block text-center mb-3">
-                    <h2 className="text-base font-bold">Counter Comparison Report</h2>
-                    <p className="text-[11px]">Date: { selectedDate }</p>
-                </div>
-
                 {/* TABLE */ }
                 <div className="overflow-x-auto print:overflow-visible">
                     <table className="w-full text-xs print:text-[10px] border-collapse">
                         <thead className="border-b font-semibold">
                             <tr>
                                 <th className="text-left p-1">Counter</th>
-                                <th className="text-right p-1">Opening<br />Cash</th>
-                                <th className="text-right p-1">Total<br />Sales</th>
-                                <th className="text-right p-1">Cash<br />Sales</th>
-                                <th className="text-right p-1">Card / UPI<br />Sales</th>
-                                <th className="text-right p-1">Credit<br />Sales</th>
-                                <th className="text-right p-1">Payments<br />IN</th>
-                                <th className="text-right p-1">Payments<br />OUT</th>
-                                <th className="text-right p-1">Expected<br />Cash</th>
-                                <th className="text-right p-1">Actual<br />Cash</th>
-                                <th className="text-right p-1">Shortage /<br />Excess</th>
-                                <th className="text-right p-1">Next Day<br />Opening</th>
-                                <th className="text-right p-1">Total Available<br />Cash</th>
+                                <th className="text-right p-1">Opening</th>
+                                <th className="text-right p-1">Total</th>
+                                <th className="text-right p-1">Cash</th>
+                                <th className="text-right p-1">Card</th>
+                                <th className="text-right p-1">Credit</th>
+                                <th className="text-right p-1">IN</th>
+                                <th className="text-right p-1">OUT</th>
+                                <th className="text-right p-1">Expected</th>
+                                <th className="text-right p-1">Actual</th>
+                                <th className="text-right p-1">Short / Excess</th>
+                                <th className="text-right p-1">Next Day</th>
+                                <th className="text-right p-1">Available</th>
                             </tr>
                         </thead>
 
@@ -177,6 +243,7 @@ export default function CounterComparisonPage ()
                                     )
                                 )
 
+                                /* ===== SMART FASHION SPLIT ===== */
                                 if ( isBoth )
                                 {
                                     const martCash =
@@ -233,7 +300,12 @@ export default function CounterComparisonPage ()
                                                 <td className="text-right p-1">{ totalOut.toFixed( 2 ) }</td>
                                                 <td className="text-right p-1">{ expected.toFixed( 2 ) }</td>
                                                 <td className="text-right p-1">{ actual.toFixed( 2 ) }</td>
-                                                <td className="text-right p-1">{ Math.abs( diff ).toFixed( 2 ) }</td>
+                                                <td
+                                                    className={ `text-right p-1 font-semibold ${ diff > 0 ? "text-red-600" : diff < 0 ? "text-green-600" : ""
+                                                        }` }
+                                                >
+                                                    { Math.abs( diff ).toFixed( 2 ) }
+                                                </td>
                                                 <td className="text-right p-1">{ nextDay.toFixed( 2 ) }</td>
                                                 <td className="text-right p-1">{ available.toFixed( 2 ) }</td>
                                             </tr>
@@ -241,10 +313,11 @@ export default function CounterComparisonPage ()
                                     )
                                 }
 
+                                /* ===== NORMAL COUNTER ===== */
                                 return (
                                     <tr key={ entry._id } className="border-b">
-                                        <td className="p-1">
-                                            <div className="font-semibold">{ entry.counterName }</div>
+                                        <td className="p-1 font-semibold">
+                                            { entry.counterName }
                                             <div className="text-[9px]">
                                                 <StatusBadge status={ entry.status } />
                                             </div>
@@ -258,12 +331,39 @@ export default function CounterComparisonPage ()
                                         <td className="text-right p-1">{ totalOut.toFixed( 2 ) }</td>
                                         <td className="text-right p-1">{ expected.toFixed( 2 ) }</td>
                                         <td className="text-right p-1">{ actual.toFixed( 2 ) }</td>
-                                        <td className="text-right p-1">{ Math.abs( diff ).toFixed( 2 ) }</td>
+                                        <td
+                                            className={ `text-right p-1 font-semibold ${ diff > 0 ? "text-red-600" : diff < 0 ? "text-green-600" : ""
+                                                }` }
+                                        >
+                                            { Math.abs( diff ).toFixed( 2 ) }
+                                        </td>
                                         <td className="text-right p-1">{ nextDay.toFixed( 2 ) }</td>
                                         <td className="text-right p-1">{ available.toFixed( 2 ) }</td>
                                     </tr>
                                 )
                             } ) }
+
+                            {/* ===== GRAND TOTAL ===== */ }
+                            <tr className="font-bold bg-muted/30 border-t-2">
+                                <td className="p-1">GRAND TOTAL</td>
+                                <td className="text-right p-1">{ totals.opening.toFixed( 2 ) }</td>
+                                <td className="text-right p-1">{ totals.totalSales.toFixed( 2 ) }</td>
+                                <td className="text-right p-1">{ totals.cash.toFixed( 2 ) }</td>
+                                <td className="text-right p-1">{ totals.card.toFixed( 2 ) }</td>
+                                <td className="text-right p-1">{ totals.credit.toFixed( 2 ) }</td>
+                                <td className="text-right p-1">{ totals.in.toFixed( 2 ) }</td>
+                                <td className="text-right p-1">{ totals.out.toFixed( 2 ) }</td>
+                                <td className="text-right p-1">{ totals.expected.toFixed( 2 ) }</td>
+                                <td className="text-right p-1">{ totals.actual.toFixed( 2 ) }</td>
+                                <td
+                                    className={ `text-right p-1 font-semibold ${ totals.diff > 0 ? "text-red-600" : totals.diff < 0 ? "text-green-600" : ""
+                                        }` }
+                                >
+                                    { Math.abs( totals.diff ).toFixed( 2 ) }
+                                </td>
+                                <td className="text-right p-1">{ totals.nextDay.toFixed( 2 ) }</td>
+                                <td className="text-right p-1">{ totals.available.toFixed( 2 ) }</td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -276,24 +376,6 @@ export default function CounterComparisonPage ()
                     </Button>
                 </div>
             </Card>
-
-            {/* PRINT STYLES */ }
-            <style jsx global>{ `
-        @page {
-          size: A4 landscape;
-          margin: 10mm;
-        }
-
-        @media print {
-          body {
-            background: white;
-          }
-
-          tr {
-            page-break-inside: avoid;
-          }
-        }
-      `}</style>
         </div>
     )
 }
