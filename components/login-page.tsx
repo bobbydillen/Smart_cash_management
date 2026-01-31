@@ -1,19 +1,28 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { login } from "@/app/actions/auth"
-import { Store, ShoppingBag, Sparkles, ShoppingCart, ShieldCheck } from "lucide-react"
+import {
+  Store,
+  ShoppingBag,
+  Sparkles,
+  ShoppingCart,
+  ShieldCheck,
+} from "lucide-react"
 
 const counters = [
   { id: "mart1", name: "Smart Mart Counter 1", icon: Store, username: "mart1" },
   { id: "mart2", name: "Smart Mart Counter 2", icon: ShoppingCart, username: "mart2" },
   { id: "martfancy", name: "Smart Mart Fancy", icon: Sparkles, username: "martfancy" },
   { id: "fashion", name: "Smart Fashion (Both)", icon: ShoppingBag, username: "fashion" },
+
+  // ✅ NEW SUPERVISOR
+  { id: "supervisor", name: "Supervisor", icon: ShieldCheck, username: "supervisor" },
+
   { id: "admin", name: "Admin", icon: ShieldCheck, username: "admin" },
 ]
 
@@ -32,8 +41,7 @@ export default function LoginPage() {
 
     const result = await login(selectedCounter, password)
 
-    // Only show error if result exists and has an error
-    // If redirect happens, this code won't execute
+    // If redirect happens, code below won't execute
     if (result && result.error) {
       setError(result.error)
       setLoading(false)
@@ -44,7 +52,9 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-secondary p-4">
       <div className="w-full max-w-4xl">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-foreground mb-2">Smart Mart & Smart Fashions</h1>
+          <h1 className="text-4xl font-bold text-foreground mb-2">
+            Smart Mart & Smart Fashions
+          </h1>
           <p className="text-muted-foreground">Cash Management System</p>
         </div>
 
@@ -73,7 +83,9 @@ export default function LoginPage() {
             <form onSubmit={handleLogin} className="space-y-6">
               <div className="text-center">
                 {(() => {
-                  const counter = counters.find((c) => c.username === selectedCounter)
+                  const counter = counters.find(
+                    (c) => c.username === selectedCounter
+                  )
                   const Icon = counter?.icon
                   return (
                     <>
@@ -103,7 +115,11 @@ export default function LoginPage() {
                 />
               </div>
 
-              {error && <div className="text-destructive text-sm text-center">{error}</div>}
+              {error && (
+                <div className="text-destructive text-sm text-center">
+                  {error}
+                </div>
+              )}
 
               <div className="flex gap-3">
                 <Button
@@ -119,7 +135,11 @@ export default function LoginPage() {
                 >
                   Back
                 </Button>
-                <Button type="submit" disabled={loading || !password} className="flex-1">
+                <Button
+                  type="submit"
+                  disabled={loading || !password}
+                  className="flex-1"
+                >
                   {loading ? "Logging in..." : "Login"}
                 </Button>
               </div>

@@ -15,11 +15,18 @@ export async function login(username: string, password: string) {
 
   await createSession(user._id.toString())
 
+  // ✅ ADMIN (UNCHANGED)
   if (user.role === "admin") {
     redirect("/admin")
-  } else {
-    redirect("/counter")
   }
+
+  // ✅ SUPERVISOR (NEW – SAFE ADD)
+  if (user.role === "supervisor") {
+    redirect("/supervisor")
+  }
+
+  // ✅ COUNTER (DEFAULT – UNCHANGED)
+  redirect("/counter")
 }
 
 export async function logout() {
