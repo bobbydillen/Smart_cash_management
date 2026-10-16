@@ -71,6 +71,78 @@ try {
   r = await S.createVendor(db, actor, { name: "Mega Foods" })
   const v2 = r.vendorId
 
+  // ===== goods returned to a vendor (expired / damaged): comes off what we owe
+  {
+    r = await S.createVendor(db, actor, { name: "Return Test Foods" })
+    const rv = r.vendorId
+    r = await S.createBill(db, actor, { vendorId: rv, billNumber: "RT-1", billDate: today, amount: 10000 })
+    const rbill = r.billId
+    const total = async () => (await S.getVendorDetail(db, rv)).balance.totalToPay
+
+    t("return needs a reason", isErr(await S.recordReturn(db, actor, { vendorId: rv, billId: rbill, amount: 100, reason: "", by: "Ravi" })))
+    t("return needs a valid reason", isErr(await S.recordReturn(db, actor, { vendorId: rv, billId: rbill, amount: 100, reason: "Felt like it", by: "Ravi" })))
+    t("return needs an amount", isErr(await S.recordReturn(db, actor, { vendorId: rv, billId: rbill, amount: 0, reason: "Expired", by: "Ravi" })))
+    t("return needs purchase staff", isErr(await S.recordReturn(db, actor, { vendorId: rv, billId: rbill, amount: 100, reason: "Expired", by: "Nobody" })))
+    t("return cannot be more than the bill", isErr(await S.recordReturn(db, actor, { vendorId: rv, billId: rbill, amount: 10000.01, reason: "Expired", by: "Ravi" })))
+
+    r = await S.recordReturn(db, actor, { vendorId: rv, billId: rbill, amount: 2500, reason: "Expired", items: "Curd 20 packs", creditNote: "CN-7", by: "Ravi" })
+    t("return recorded against a bill", !isErr(r), JSON.stringify(r))
+    let rd = await S.getVendorDetail(db, rv)
+    const rb = rd.bills[0]
+    t("bill shows 2500 returned, 7500 left, part", rb.returned === 2500 && approx(rb.outstanding, 7500) && rb.status === "part", JSON.stringify(rb))
+    t("vendor total drops by the return", approx(rd.balance.totalToPay, 7500) && rd.balance.returned === 2500, JSON.stringify(rd.balance))
+    t("the return is listed", rd.returns.length === 1 && rd.returns[0].reason === "Expired" && rd.returns[0].creditNote === "CN-7")
+
+    t("cannot pay more than what is left after the return", isErr(await S.recordPayment(db, actor, { vendorId: rv, billId: rbill, amount: 7500.01, mode: "cash" }, "admin")))
+    t("paying the rest after the return works", !isErr(await S.recordPayment(db, actor, { vendorId: rv, billId: rbill, amount: 7500, mode: "cash" }, "admin")))
+    rd = await S.getVendorDetail(db, rv)
+    t("bill is fully settled (paid + returned)", rd.bills[0].status === "paid" && approx(rd.bills[0].outstanding, 0) && approx(rd.balance.totalToPay, 0), JSON.stringify(rd.bills[0]))
+    t("a bill cannot be cut below what is paid and returned", isErr(await S.updateBill(db, rbill, { billNumber: "RT-1", billDate: today, amount: 9000 })))
+
+    // goods returned after the bill was paid: credit with the vendor
+    t("return on a paid bill gives a credit", !isErr(await S.recordReturn(db, actor, { vendorId: rv, billId: rbill, amount: 1000, reason: "Damaged", by: "Ravi" })))
+    rd = await S.getVendorDetail(db, rv)
+    t("total to pay is -1000 (credit)", approx(rd.balance.totalToPay, -1000), JSON.stringify(rd.balance))
+    t("returns on one bill stop at the bill amount", isErr(await S.recordReturn(db, actor, { vendorId: rv, billId: rbill, amount: 6600, reason: "Damaged", by: "Ravi" })))
+
+    // on account: never more than is owed
+    t("on-account return cannot create a credit", isErr(await S.recordReturn(db, actor, { vendorId: rv, amount: 100, reason: "Excess stock", by: "Ravi" })))
+    await S.createBill(db, actor, { vendorId: rv, billNumber: "RT-2", billDate: today, amount: 4000 })
+    r = await S.recordReturn(db, actor, { vendorId: rv, amount: 1500, reason: "Quality issue", by: "Ravi" })
+    t("on-account return works when bills are owed", !isErr(r), JSON.stringify(r))
+    t("total is now 1500 (4000 bill - 1000 credit - 1500 returned)", approx(await total(), 1500), String(await total()))
+
+    // the timeline ends on the vendor's total
+    rd = await S.getVendorDetail(db, rv)
+    const tlr = Pm.buildTimeline(rd)
+    t("timeline includes the returns and ends on the vendor total", tlr.filter((e) => e.kind === "return").length === 3 && approx(tlr[tlr.length - 1].balanceAfter, rd.balance.totalToPay), JSON.stringify(tlr.map((e) => e.balanceAfter)))
+
+    // cancelling puts it back
+    const accountReturn = rd.returns.find((x) => !x.billId)
+    t("cancel a return", !isErr(await S.cancelReturn(db, accountReturn._id)))
+    t("cancelling twice is refused", isErr(await S.cancelReturn(db, accountReturn._id)))
+    t("total goes back up by the cancelled amount", approx(await total(), 3000), String(await total()))
+    rd = await S.getVendorDetail(db, rv)
+    t("timeline still ends on the total after a cancel", approx(Pm.buildTimeline(rd).at(-1).balanceAfter, rd.balance.totalToPay))
+    // an old return cannot be cancelled by the purchase counter
+    const { ObjectId } = await import(url("node_modules/mongodb/lib/index.js"))
+    await db.collection("purchase_returns").updateOne({ billId: new ObjectId(rbill), voided: false }, { $set: { date: "2000-01-01" } })
+    const old = (await S.getVendorDetail(db, rv)).returns.find((x) => x.date === "2000-01-01")
+    t("purchase counter cannot cancel an old return", isErr(await S.cancelReturn(db, old._id, "purchase")))
+    t("admin can cancel any return", !isErr(await S.cancelReturn(db, old._id, "admin")))
+    t("admin can record a return without choosing staff", !isErr(await S.recordReturn(db, actor, { vendorId: rv, billId: rbill, amount: 500, reason: "Other" }, "admin")))
+
+    const listed = (await S.listVendors(db)).find((x) => x._id === rv)
+    t("vendor list balance includes returns", approx(listed.balance.totalToPay, (await total())))
+
+    // leave nothing behind for the checks that follow
+    const vid = new ObjectId(rv)
+    await db.collection("purchase_returns").deleteMany({ vendorId: vid })
+    await db.collection("purchase_payments").deleteMany({ vendorId: vid })
+    await db.collection("purchase_bills").deleteMany({ vendorId: vid })
+    await db.collection("vendors").deleteOne({ _id: vid })
+  }
+
   // ===== names are saved with a capital at the start of every word
   {
     const { properCase } = await import(url(".scratch-test/text-format.mjs"))

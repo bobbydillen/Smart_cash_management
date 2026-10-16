@@ -19,14 +19,15 @@ import {
   Plus,
   Receipt,
   Trash2,
+  PackageX,
   Truck,
   Undo2,
   UserPlus,
   X,
 } from "lucide-react"
-import { BillForm, PaymentForm, SettleVoucherForm, VendorForm } from "./forms"
+import { BillForm, PaymentForm, ReturnForm, SettleVoucherForm, VendorForm } from "./forms"
 import { ModeChip, SourceChip, relativeDay } from "./common"
-import { cancelCashPayment, cancelVoucher, changeChequeStatus, removeBill, toggleVendor } from "@/app/actions/purchase"
+import { cancelCashPayment, cancelVendorReturn, cancelVoucher, changeChequeStatus, removeBill, toggleVendor } from "@/app/actions/purchase"
 import { inr, shortDate, todayIST } from "@/lib/report"
 import { buildTimeline, payerLabel, type BillWithStatus, type ChequeStatus, type TimelineEvent, type Voucher } from "@/lib/purchase"
 import type { VendorDetail, VendorRow } from "@/lib/purchase-service"
@@ -55,12 +56,13 @@ export default function VendorDetailView({
   // the admin can also pay vendors, clear cheques and settle vouchers (from their own money)
   const canPay = role === "purchase" || role === "admin"
   const asAdmin = role === "admin"
-  const { vendor, balance, bills, payments, cheques, vouchers } = detail
+  const { vendor, balance, bills, payments, cheques, vouchers, returns } = detail
 
   const [modal, setModal] = useState<
     | { kind: "edit" }
     | { kind: "bill"; bill?: BillWithStatus }
     | { kind: "pay"; billId?: string }
+    | { kind: "return"; billId?: string }
     | { kind: "settle"; voucher: Voucher }
     | null
   >(null)
@@ -68,6 +70,7 @@ export default function VendorDetailView({
   const [payLimit, setPayLimit] = useState(FIRST)
   const [billLimit, setBillLimit] = useState(FIRST)
   const [chequeLimit, setChequeLimit] = useState(FIRST)
+  const [returnLimit, setReturnLimit] = useState(FIRST)
 
   const done = () => {
     setModal(null)
@@ -131,6 +134,15 @@ export default function VendorDetailView({
                 <Plus /> Add bill
               </Button>
             )}
+            <Button
+              size="lg"
+              variant="outline"
+              className={canEdit ? "col-span-2" : ""}
+              onClick={() => setModal({ kind: "return" })}
+              disabled={bills.length === 0}
+            >
+              <PackageX /> Return goods (expired / damaged)
+            </Button>
           </div>
         )}
       </Card>
@@ -144,7 +156,13 @@ export default function VendorDetailView({
           <Fact label="Vouchers pending" value={balance.vouchersPending} />
           <Fact label="Total billed" value={balance.billed + balance.opening} hint={balance.opening > 0 ? `incl. ₹${inr(balance.opening)} brought forward` : undefined} />
           <Fact label="Total paid" value={balance.paid} />
+          {balance.returned > 0.004 && <Fact label="Goods returned" value={balance.returned} hint="taken off what we owe" />}
         </div>
+        {balance.totalToPay < -0.004 && (
+          <p className="mt-3 rounded-lg bg-info-soft px-3 py-2 text-sm text-info">
+            Credit with this vendor: ₹{inr(-balance.totalToPay)}. We have paid or returned more than the bills came to, so it comes off the next bill.
+          </p>
+        )}
       </Card>
 
       {error && <Notice tone="danger">{error}</Notice>}
@@ -220,10 +238,12 @@ export default function VendorDetailView({
                     </div>
                     <div className="text-right text-sm">
                       <div className="font-semibold">₹{inr(b.amount)}</div>
-                      {b.status !== "unpaid" && (
+                      {(b.status !== "unpaid" || b.returned > 0) && (
                         <div className="text-xs text-muted-foreground">
-                          paid ₹{inr(b.paid)}
+                          {b.paid > 0 && <>paid ₹{inr(b.paid)}</>}
+                          {b.returned > 0 && <>{b.paid > 0 ? " · " : ""}returned ₹{inr(b.returned)}</>}
                           {b.status === "part" && <> · left ₹{inr(b.outstanding)}</>}
+                          {b.outstanding < -0.004 && <> · credit ₹{inr(-b.outstanding)}</>}
                         </div>
                       )}
                     </div>
@@ -233,6 +253,11 @@ export default function VendorDetailView({
                       {b.outstanding > 0.004 && (
                         <Button size="sm" onClick={() => setModal({ kind: "pay", billId: b._id })}>
                           <Banknote /> Pay
+                        </Button>
+                      )}
+                      {canPay && b.amount - b.returned > 0.004 && (
+                        <Button size="sm" variant="outline" onClick={() => setModal({ kind: "return", billId: b._id })}>
+                          <PackageX /> Return
                         </Button>
                       )}
                       <Button size="sm" variant="outline" onClick={() => setModal({ kind: "bill", bill: b })}>
@@ -302,6 +327,60 @@ export default function VendorDetailView({
             total={cheques.length}
             onMore={() => setChequeLimit((n) => n + STEP)}
             onLess={() => setChequeLimit(FIRST)}
+          />
+        </Card>
+      )}
+
+      {/* ================= RETURNS ================= */}
+      {returns.length > 0 && (
+        <Card className="p-5">
+          <SectionHeader
+            icon={<PackageX className="size-4" />}
+            title="Goods returned"
+            subtitle={`${returns.filter((r) => !r.voided).length} return${returns.filter((r) => !r.voided).length === 1 ? "" : "s"} · ₹${inr(balance.returned)} taken off what we owe`}
+          />
+          <div className="mt-3 divide-y">
+            {returns.slice(0, returnLimit).map((r) => {
+              const forBill = r.billId ? bills.find((b) => b._id === r.billId)?.billNumber : undefined
+              const mine = role === "admin" || (role === "purchase" && r.source !== "admin" && r.date === today)
+              return (
+                <div key={r._id} className={`flex flex-wrap items-center gap-3 py-3 ${r.voided ? "opacity-60" : ""}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium">
+                      {r.reason}
+                      {r.items && <span className="font-normal text-muted-foreground"> · {r.items}</span>}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(r.createdAt).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      {" · "}
+                      {forBill ? `Bill ${forBill}` : "On account"}
+                      {r.creditNote && ` · credit note ${r.creditNote}`} · by {r.by}
+                      {r.note && ` · “${r.note}”`}
+                    </div>
+                  </div>
+                  {r.voided && <StatusChip tone="neutral" dot={false}>Cancelled</StatusChip>}
+                  <div className={`w-28 text-right text-sm font-semibold ${r.voided ? "line-through" : ""}`}>₹{inr(r.amount)}</div>
+                  {canPay && mine && !r.voided && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="size-8 text-danger hover:bg-danger-soft hover:text-danger"
+                      aria-label="Cancel this return"
+                      title="Cancel this return"
+                      onClick={() => confirm(`Cancel the ₹${inr(r.amount)} return? It goes back on what we owe.`) && act(() => cancelVendorReturn(r._id))}
+                    >
+                      <X />
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <ShowMore
+            shown={returnLimit}
+            total={returns.length}
+            onMore={() => setReturnLimit((n) => n + STEP)}
+            onLess={() => setReturnLimit(FIRST)}
           />
         </Card>
       )}
@@ -379,7 +458,7 @@ export default function VendorDetailView({
 
       {/* ================= TIMELINE ================= */}
       <VendorTimeline
-        events={buildTimeline({ vendor, bills, payments, cheques, vouchers })}
+        events={buildTimeline({ vendor, bills, payments, cheques, vouchers, returns })}
       />
 
       {canEdit && (
@@ -396,6 +475,9 @@ export default function VendorDetailView({
       )}
       {modal?.kind === "pay" && (
         <PaymentForm vendors={vendors} defaultVendorId={vendor._id} defaultBillId={modal.billId} asAdmin={asAdmin} onClose={() => setModal(null)} onDone={done} />
+      )}
+      {modal?.kind === "return" && (
+        <ReturnForm vendor={vendor} bills={bills} defaultBillId={modal.billId} asAdmin={asAdmin} onClose={() => setModal(null)} onDone={done} />
       )}
       {modal?.kind === "settle" && (
         <SettleVoucherForm voucher={modal.voucher} vendorName={vendor.name} asAdmin={asAdmin} onClose={() => setModal(null)} onDone={done} />
@@ -460,6 +542,7 @@ const KIND_STYLE: Record<TimelineEvent["kind"], { icon: typeof Receipt; tone: st
   cheque: { icon: CheckCircle2, tone: "bg-info-soft text-info" },
   voucher: { icon: FileText, tone: "bg-warning-soft text-warning" },
   reversal: { icon: Undo2, tone: "bg-danger-soft text-danger" },
+  return: { icon: PackageX, tone: "bg-info-soft text-info" },
 }
 
 /** Everything that happened with the vendor, newest first, with what is owed after each step. */

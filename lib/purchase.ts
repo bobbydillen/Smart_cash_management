@@ -13,8 +13,11 @@ import type { DenominationCount } from "./types"
  *    cash or a cheque. Settling it does not reduce the bills again.
  *  - A bounced / cancelled cheque or a cancelled voucher voids its payment, which
  *    puts the amount back on the bill.
+ *  - Goods sent back (expired, damaged, wrong items) are a RETURN: a credit note that
+ *    reduces what we owe, against a particular bill or on account. A cancelled return
+ *    puts the amount back.
  *
- *  total to pay = (opening + bills - payments) + pending vouchers
+ *  total to pay = (opening + bills - payments - returns) + pending vouchers
  */
 
 export type PayMode = "cash" | "cheque" | "voucher"
@@ -57,6 +60,9 @@ export interface Bill {
 
 export interface BillWithStatus extends Bill {
   paid: number
+  /** goods returned against this bill */
+  returned: number
+  /** negative when more was paid and returned than the bill came to (credit with the vendor) */
   outstanding: number
   status: "unpaid" | "part" | "paid"
 }
@@ -95,6 +101,31 @@ export interface PurchasePayment {
   voided?: boolean
   createdAt: string
   createdBy: string
+}
+
+export const RETURN_REASONS = ["Expired", "Damaged", "Wrong item", "Quality issue", "Excess stock", "Other"] as const
+export type ReturnReason = (typeof RETURN_REASONS)[number]
+
+/** Goods sent back to a vendor. Reduces what we owe, like a credit note. */
+export interface VendorReturn {
+  _id: string
+  vendorId: string
+  /** the bill the goods came with; empty = on account */
+  billId?: string | null
+  date: string
+  amount: number
+  reason: ReturnReason
+  /** what was returned, e.g. "Curd 12 packs" */
+  items?: string
+  /** the vendor's credit note number, if they gave one */
+  creditNote?: string
+  note?: string
+  /** the purchase staff member (or the admin) who recorded it */
+  by: string
+  source: "purchase" | "admin"
+  voided?: boolean
+  voidedAt?: string
+  createdAt: string
 }
 
 export interface Bank {
@@ -149,6 +180,8 @@ export interface VendorBalance {
   /** opening + billed - paid */
   billsOutstanding: number
   vouchersPending: number
+  /** goods returned to the vendor (credit notes) */
+  returned: number
   /** what we still have to pay this vendor */
   totalToPay: number
 }
@@ -159,14 +192,16 @@ export function vendorBalance(
   opening: number,
   billed: number,
   paid: number,
-  vouchersPending: number
+  vouchersPending: number,
+  returned = 0
 ): VendorBalance {
-  const billsOutstanding = round2(opening + billed - paid)
+  const billsOutstanding = round2(opening + billed - paid - returned)
   return {
     opening: round2(opening),
     billed: round2(billed),
     paid: round2(paid),
     billsOutstanding,
+    returned: round2(returned),
     vouchersPending: round2(vouchersPending),
     totalToPay: round2(billsOutstanding + vouchersPending),
   }
@@ -260,7 +295,7 @@ export function expectedPurchaseCash(
 
 /* ================= VENDOR TIMELINE ================= */
 
-export type TimelineKind = "vendor" | "bill" | "payment" | "cheque" | "voucher" | "reversal"
+export type TimelineKind = "vendor" | "bill" | "payment" | "cheque" | "voucher" | "reversal" | "return"
 
 export interface TimelineEvent {
   /** when it happened (bills use the bill date, with no time) */
@@ -294,8 +329,10 @@ export function buildTimeline(input: {
   payments: PurchasePayment[]
   cheques: Cheque[]
   vouchers: Voucher[]
+  returns?: VendorReturn[]
 }): TimelineEvent[] {
   const { vendor, bills, payments, cheques, vouchers } = input
+  const returns = input.returns ?? []
   const billNo = new Map(bills.map((b) => [b._id, b.billNumber]))
   const chequeById = new Map(cheques.map((c) => [c._id, c]))
   const voucherById = new Map(vouchers.map((v) => [v._id, v]))
@@ -375,6 +412,40 @@ export function buildTimeline(input: {
         detail: effect === "0" ? "The bill is unpaid again" : "Added back to what we owe",
         amount: p.amount,
         effect: effect === "0" ? "0" : "+",
+      })
+    }
+  }
+
+  for (const r of returns) {
+    const forBill = r.billId ? billNo.get(r.billId) : undefined
+    events.push({
+      key: r.createdAt,
+      at: r.createdAt,
+      hasTime: true,
+      kind: "return",
+      title: `Goods returned (${r.reason.toLowerCase()})`,
+      detail: [
+        r.items,
+        forBill ? `against bill ${forBill}` : "on account",
+        r.creditNote ? `credit note ${r.creditNote}` : undefined,
+        `by ${r.by}`,
+        r.note,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      amount: r.amount,
+      effect: "-",
+    })
+    if (r.voided && r.voidedAt) {
+      events.push({
+        key: r.voidedAt,
+        at: r.voidedAt,
+        hasTime: true,
+        kind: "reversal",
+        title: "Return cancelled",
+        detail: "Added back to what we owe",
+        amount: r.amount,
+        effect: "+",
       })
     }
   }

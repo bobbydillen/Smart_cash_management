@@ -19,7 +19,7 @@ if (dbName === "smartmart_cash") {
   process.exit(1)
 }
 
-const COLLECTIONS = ["vendors", "purchase_bills", "purchase_payments", "cheques", "vouchers", "purchase_days"]
+const COLLECTIONS = ["vendors", "purchase_bills", "purchase_payments", "purchase_returns", "cheques", "vouchers", "purchase_days"]
 const client = new MongoClient(uri)
 await client.connect()
 const db = client.db(dbName)

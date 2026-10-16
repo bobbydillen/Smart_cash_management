@@ -53,6 +53,7 @@ The purchase counter pays the vendors who supply goods.
   appears as *Money out* on its Payments page, all saved together. The purchase counter sees the bill and what is
   still due. Admin and counter payments never change the purchase
   counter's drawer; each payment shows who paid.
+- **Returns** - goods sent back (expired, damaged, wrong items) are recorded from the vendor page with a reason, what was returned and the vendor's credit note number. The value comes off what is owed, against a bill or on account, and shows on the timeline. No cash moves. A return can be cancelled (purchase counter: today's own; admin: any).
 - **Vendor page** - what they supply, total still to pay (bills + pending vouchers), every bill, cheque, voucher and payment.
   It ends with a **timeline** of when each bill arrived and every payment, cheque and voucher event, who made it, and
   what was still owed after each step.

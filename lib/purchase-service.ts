@@ -22,6 +22,8 @@ import {
   type PaymentSource,
   type PurchaseDay,
   type PurchasePayment,
+  type VendorReturn,
+  RETURN_REASONS,
   type Vendor,
   type VendorBalance,
   type Voucher,
@@ -46,6 +48,7 @@ const chequesCol = (db: Db) => db.collection("cheques")
 const vouchersCol = (db: Db) => db.collection("vouchers")
 const daysCol = (db: Db) => db.collection("purchase_days")
 const banksCol = (db: Db) => db.collection("banks")
+const returnsCol = (db: Db) => db.collection("purchase_returns")
 
 /* ================= SMALL HELPERS ================= */
 
@@ -191,7 +194,7 @@ export async function setVendorActive(db: Db, id: string, active: boolean) {
 
 /** Balances for every vendor, from three small aggregations. */
 async function balancesByVendor(db: Db): Promise<Map<string, VendorBalance>> {
-  const [billed, paid, pending, vendors] = await Promise.all([
+  const [billed, paid, pending, returnedRows, vendors] = await Promise.all([
     billsCol(db).aggregate([{ $group: { _id: "$vendorId", total: { $sum: "$amount" } } }]).toArray(),
     paymentsCol(db)
       .aggregate([
@@ -205,6 +208,12 @@ async function balancesByVendor(db: Db): Promise<Map<string, VendorBalance>> {
         { $group: { _id: "$vendorId", total: { $sum: "$amount" } } },
       ])
       .toArray(),
+    returnsCol(db)
+      .aggregate([
+        { $match: { voided: { $ne: true } } },
+        { $group: { _id: "$vendorId", total: { $sum: "$amount" } } },
+      ])
+      .toArray(),
     vendorsCol(db).find({}, { projection: { openingBalance: 1 } }).toArray(),
   ])
 
@@ -212,11 +221,12 @@ async function balancesByVendor(db: Db): Promise<Map<string, VendorBalance>> {
   const b = sumOf(billed)
   const p = sumOf(paid)
   const v = sumOf(pending)
+  const ret = sumOf(returnedRows)
 
   const out = new Map<string, VendorBalance>()
   for (const vendor of vendors) {
     const key = String(vendor._id)
-    out.set(key, vendorBalance(vendor.openingBalance || 0, b.get(key) || 0, p.get(key) || 0, v.get(key) || 0))
+    out.set(key, vendorBalance(vendor.openingBalance || 0, b.get(key) || 0, p.get(key) || 0, v.get(key) || 0, ret.get(key) || 0))
   }
   return out
 }
@@ -243,6 +253,7 @@ export interface VendorDetail {
   payments: PurchasePayment[]
   cheques: Cheque[]
   vouchers: Voucher[]
+  returns: VendorReturn[]
 }
 
 export async function getVendorDetail(db: Db, id: string): Promise<VendorDetail | null> {
@@ -251,13 +262,15 @@ export async function getVendorDetail(db: Db, id: string): Promise<VendorDetail 
   const vendorDoc = await vendorsCol(db).findOne({ _id })
   if (!vendorDoc) return null
 
-  const [billDocs, payDocs, chequeDocs, voucherDocs] = await Promise.all([
+  const [billDocs, payDocs, chequeDocs, voucherDocs, returnDocs] = await Promise.all([
     billsCol(db).find({ vendorId: _id }).sort({ billDate: -1, createdAt: -1 }).toArray(),
     paymentsCol(db).find({ vendorId: _id }).sort({ date: -1, createdAt: -1 }).toArray(),
     chequesCol(db).find({ vendorId: _id }).sort({ chequeDate: -1 }).toArray(),
     vouchersCol(db).find({ vendorId: _id }).sort({ issuedDate: -1 }).toArray(),
+    returnsCol(db).find({ vendorId: _id }).sort({ createdAt: -1 }).toArray(),
   ])
 
+  const returns = returnDocs.map((d) => plain<VendorReturn>(d))
   const payments = payDocs.map((d) => plain<PurchasePayment>(d))
   const vouchers = voucherDocs.map((d) => plain<Voucher>(d))
   const vendor = plain<Vendor>(vendorDoc)
@@ -270,14 +283,25 @@ export async function getVendorDetail(db: Db, id: string): Promise<VendorDetail 
     if (p.billId) paidByBill.set(p.billId, (paidByBill.get(p.billId) || 0) + p.amount)
   }
 
+  const returnedByBill = new Map<string, number>()
+  let returnedTotal = 0
+  for (const r of returns) {
+    if (r.voided) continue
+    returnedTotal += r.amount
+    if (r.billId) returnedByBill.set(r.billId, (returnedByBill.get(r.billId) || 0) + r.amount)
+  }
+
   const bills = billDocs.map((d) => {
     const bill = plain<Bill>(d)
     const paid = round2(paidByBill.get(bill._id) || 0)
+    const returned = round2(returnedByBill.get(bill._id) || 0)
     return {
       ...bill,
       paid,
-      outstanding: round2(bill.amount - paid),
-      status: billStatus(bill.amount, paid),
+      returned,
+      outstanding: round2(bill.amount - paid - returned),
+      // goods sent back count towards settling the bill, like a payment
+      status: billStatus(bill.amount, paid + returned),
     }
   })
 
@@ -286,11 +310,12 @@ export async function getVendorDetail(db: Db, id: string): Promise<VendorDetail 
 
   return {
     vendor,
-    balance: vendorBalance(vendor.openingBalance || 0, billed, paidTotal, pending),
+    balance: vendorBalance(vendor.openingBalance || 0, billed, paidTotal, pending, returnedTotal),
     bills,
     payments,
     cheques: chequeDocs.map((d) => plain<Cheque>(d)),
     vouchers,
+    returns,
   }
 }
 
@@ -352,6 +377,15 @@ export async function createBill(db: Db, actor: Actor, input: BillInput) {
   return ok({ billId: res.insertedId.toString() })
 }
 
+/** Returned goods against one bill. */
+async function returnedOnBill(db: Db, billId: ObjectId, session?: ClientSession): Promise<number> {
+  const rows = await returnsCol(db)
+    .aggregate([{ $match: { billId, voided: { $ne: true } } }, { $group: { _id: null, total: { $sum: "$amount" } } }], { session })
+    .toArray()
+  return rows[0]?.total || 0
+}
+
+/** Paid plus returned: what has already been taken off this bill. */
 async function paidOnBill(db: Db, billId: ObjectId, session?: ClientSession): Promise<number> {
   const rows = await paymentsCol(db)
     .aggregate(
@@ -362,7 +396,7 @@ async function paidOnBill(db: Db, billId: ObjectId, session?: ClientSession): Pr
       { session }
     )
     .toArray()
-  return rows[0]?.total || 0
+  return round2((rows[0]?.total || 0) + (await returnedOnBill(db, billId, session)))
 }
 
 export async function updateBill(db: Db, id: string, input: BillInput) {
@@ -653,7 +687,7 @@ const MODES: PayMode[] = ["cash", "cheque", "voucher"]
 /** What we still owe on bills (not counting vouchers) for one vendor. */
 async function billsOutstanding(db: Db, vendorId: ObjectId, session?: ClientSession): Promise<number> {
   const vendor = await vendorsCol(db).findOne({ _id: vendorId }, { session })
-  const [billed, paid] = await Promise.all([
+  const [billed, paid, returned] = await Promise.all([
     billsCol(db).aggregate([{ $match: { vendorId } }, { $group: { _id: null, t: { $sum: "$amount" } } }], { session }).toArray(),
     paymentsCol(db)
       .aggregate(
@@ -664,8 +698,11 @@ async function billsOutstanding(db: Db, vendorId: ObjectId, session?: ClientSess
         { session }
       )
       .toArray(),
+    returnsCol(db)
+      .aggregate([{ $match: { vendorId, voided: { $ne: true } } }, { $group: { _id: null, t: { $sum: "$amount" } } }], { session })
+      .toArray(),
   ])
-  return round2((vendor?.openingBalance || 0) + (billed[0]?.t || 0) - (paid[0]?.t || 0))
+  return round2((vendor?.openingBalance || 0) + (billed[0]?.t || 0) - (paid[0]?.t || 0) - (returned[0]?.t || 0))
 }
 
 function cleanCheque(c: PaymentInput["cheque"]): Failure | { number: string; bank: string; chequeDate: string } {
@@ -1289,6 +1326,102 @@ export async function cancelCashMove(db: Db, moveId: unknown) {
       return ok()
     }
     return stop("Entry not found")
+  })
+}
+
+/* ================= RETURNS (goods sent back) ================= */
+
+export interface ReturnInput {
+  vendorId?: unknown
+  billId?: unknown
+  amount?: unknown
+  reason?: unknown
+  items?: unknown
+  creditNote?: unknown
+  note?: unknown
+  /** purchase staff member; not needed for the admin */
+  by?: unknown
+}
+
+/**
+ * Goods sent back to a vendor (expired, damaged, wrong items). The amount comes off what we owe.
+ *  - against a bill: at most what that bill came to, less anything already returned on it
+ *  - on account (no bill): at most what is still owed on bills, so it never creates a credit
+ * No cash moves, so the purchase drawer is not involved and the day need not be open.
+ */
+export async function recordReturn(db: Db, actor: Actor, input: ReturnInput, as: "purchase" | "admin" = "purchase") {
+  const vendorId = parseObjectId(input.vendorId)
+  if (!vendorId) return fail("Choose a vendor")
+  const amount = parseMoney(input.amount, { min: 0.01 })
+  if (amount === null) return fail("Enter the value of the goods returned")
+  const reason = (RETURN_REASONS as readonly string[]).includes(input.reason as string) ? (input.reason as string) : null
+  if (!reason) return fail("Choose why the goods are being returned")
+  if (isBad(input.items, 200) || isBad(input.creditNote, 40) || isBad(input.note, 300)) return fail("That text is too long")
+
+  let by: string
+  if (as === "admin") {
+    by = actor.username
+  } else {
+    const who = await checkInCharge(db, input.by)
+    if (typeof who !== "string") return who
+    by = who
+  }
+
+  let billId: ObjectId | null = null
+  if (input.billId) {
+    billId = parseObjectId(input.billId)
+    if (!billId) return fail("Bill not found")
+  }
+
+  return atomic(db, async (session) => {
+    const vendor = await vendorsCol(db).findOne({ _id: vendorId, active: true }, { session })
+    if (!vendor) stop("Vendor not found or no longer active")
+
+    if (billId) {
+      const bill = await billsCol(db).findOne({ _id: billId, vendorId }, { session })
+      if (!bill) stop("Bill not found for this vendor")
+      const already = await returnedOnBill(db, billId, session)
+      const room = round2(bill!.amount - already)
+      if (amount > room + 0.004) stop(`Only ₹${Math.max(room, 0).toFixed(2)} of bill ${bill!.billNumber} is left to return`)
+    } else {
+      const owed = await billsOutstanding(db, vendorId, session)
+      if (amount > owed + 0.004) stop(`This vendor is only owed ₹${Math.max(owed, 0).toFixed(2)} on bills. Pick the bill to return against.`)
+    }
+
+    const res = await returnsCol(db).insertOne(
+      {
+        vendorId,
+        billId,
+        date: todayIST(),
+        amount,
+        reason,
+        items: optionalText(input.items, 200),
+        creditNote: optionalText(input.creditNote, 40),
+        note: optionalText(input.note, 300),
+        by,
+        source: as,
+        voided: false,
+        createdAt: new Date(),
+      },
+      { session }
+    )
+    return ok({ returnId: res.insertedId.toString() })
+  })
+}
+
+/** A return entered by mistake: the purchase counter can cancel today's own, the admin any. */
+export async function cancelReturn(db: Db, returnId: unknown, as: "purchase" | "admin" = "purchase") {
+  const _id = parseObjectId(returnId)
+  if (!_id) return fail("Return not found")
+  return atomic(db, async (session) => {
+    const found = await returnsCol(db).findOne({ _id, voided: { $ne: true } }, { session })
+    if (!found) stop("Return not found")
+    if (as === "purchase") {
+      if (found!.source === "admin") stop("Only the admin can cancel the admin's returns")
+      if (found!.date !== todayIST()) stop("Only today's returns can be cancelled. Ask the admin.")
+    }
+    await returnsCol(db).updateOne({ _id }, { $set: { voided: true, voidedAt: new Date() } }, { session })
+    return ok()
   })
 }
 

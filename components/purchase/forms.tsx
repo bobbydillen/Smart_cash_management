@@ -14,9 +14,10 @@ import {
   loadVendorDetail,
   loadVendors,
   makePayment,
+  makeReturn,
   settleVoucher,
 } from "@/app/actions/purchase"
-import type { BillWithStatus, PayMode, Vendor, Voucher } from "@/lib/purchase"
+import { RETURN_REASONS, type BillWithStatus, type PayMode, type Vendor, type Voucher } from "@/lib/purchase"
 import type { VendorDetail, VendorRow } from "@/lib/purchase-service"
 import { inr, todayIST } from "@/lib/report"
 import { nameKey, properCase } from "@/lib/text-format"
@@ -471,6 +472,117 @@ export function PaymentForm({
         <FormError message={error} />
         <Button size="lg" className="w-full" onClick={save} disabled={busy || !ready}>
           {busy ? "Saving…" : `Record ${mode === "cash" ? "cash" : mode} payment`}
+        </Button>
+      </div>
+    </Modal>
+  )
+}
+
+/* ================= RETURN GOODS ================= */
+
+/** Goods sent back to the vendor (expired, damaged, wrong items): the value comes off what we owe. */
+export function ReturnForm({
+  vendor,
+  bills,
+  defaultBillId,
+  asAdmin = false,
+  onClose,
+  onDone,
+}: {
+  vendor: Vendor
+  bills: BillWithStatus[]
+  defaultBillId?: string
+  asAdmin?: boolean
+  onClose: () => void
+  onDone: () => void
+}) {
+  const [billId, setBillId] = useState(defaultBillId ?? "")
+  const [amount, setAmount] = useState("")
+  const [reason, setReason] = useState<string>(RETURN_REASONS[0])
+  const [items, setItems] = useState("")
+  const [creditNote, setCreditNote] = useState("")
+  const [note, setNote] = useState("")
+  const [by, setBy] = useState("")
+  const [error, setError] = useState("")
+  const [busy, setBusy] = useState(false)
+
+  // a bill can have goods returned up to what it came to, less what was already returned
+  const returnable = (b: BillWithStatus) => Math.round((b.amount - b.returned) * 100) / 100
+  const choices = bills.filter((b) => returnable(b) > 0.004)
+  const bill = choices.find((b) => b._id === billId)
+  const amt = Number(amount) || 0
+  const over = !!bill && amt > returnable(bill) + 0.004
+  const ready = amt > 0 && !over && !!reason && (asAdmin || !!by)
+
+  const save = async () => {
+    setError("")
+    setBusy(true)
+    const res = await makeReturn({ vendorId: vendor._id, billId: billId || undefined, amount, reason, items, creditNote, note, by })
+    setBusy(false)
+    if (res.error) return setError(res.error)
+    onDone()
+  }
+
+  return (
+    <Modal title="Return goods" subtitle={`Goods sent back to ${vendor.name}. The value is taken off what we owe.`} onClose={onClose}>
+      <div className="space-y-4">
+        <Field label="Return against" hint="Pick the bill the goods came with">
+          <select
+            className={selectClass}
+            value={billId}
+            onChange={(e) => {
+              setBillId(e.target.value)
+              setAmount("")
+            }}
+          >
+            <option value="">On account (no particular bill)</option>
+            {choices.map((b) => (
+              <option key={b._id} value={b._id}>
+                Bill {b.billNumber} · {b.billDate} · ₹{inr(b.amount)}
+                {b.returned > 0 ? ` (₹${inr(b.returned)} already returned)` : ""}
+              </option>
+            ))}
+          </select>
+        </Field>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Why are they returned?" required>
+            <select className={selectClass} value={reason} onChange={(e) => setReason(e.target.value)}>
+              {RETURN_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Value of goods returned" required hint={bill ? `Up to ₹${inr(returnable(bill))}` : undefined}>
+            <MoneyField value={amount} onChange={setAmount} />
+            {over && bill && <p className="mt-1 text-xs text-danger">That is more than is left to return (₹{inr(returnable(bill))}).</p>}
+          </Field>
+        </div>
+
+        <Field label="What was returned" hint="e.g. Curd 12 packs, expired on 12 Oct">
+          <Input value={items} maxLength={200} onChange={(e) => setItems(e.target.value)} />
+        </Field>
+        <Field label="Vendor's credit note number" hint="If they gave one">
+          <Input value={creditNote} maxLength={40} onChange={(e) => setCreditNote(e.target.value)} />
+        </Field>
+        <Field label="Note">
+          <Input value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
+        </Field>
+
+        {!asAdmin && <InchargeSelect value={by} onChange={setBy} label="Recorded by" />}
+
+        {amt > 0 && !over && (
+          <div className="rounded-lg bg-secondary px-3 py-2 text-sm">
+            ₹{inr(amt)} will be taken off what we owe {vendor.name}
+            {bill && <> on bill {bill.billNumber}</>}. No cash moves.
+          </div>
+        )}
+
+        <FormError message={error} />
+        <Button size="lg" className="w-full" onClick={save} disabled={busy || !ready}>
+          {busy ? "Saving…" : "Record return"}
         </Button>
       </div>
     </Modal>

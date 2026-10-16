@@ -138,6 +138,16 @@ export async function makePayment(input: P.PaymentInput) {
   return c ? P.recordPayment(c.db, c.actor, input, c.as) : DENIED
 }
 
+export async function makeReturn(input: P.ReturnInput) {
+  const c = await asPayer()
+  return c ? P.recordReturn(c.db, c.actor, input, c.as) : DENIED
+}
+
+export async function cancelVendorReturn(id: string) {
+  const c = await asPayer()
+  return c ? P.cancelReturn(c.db, id, c.as) : DENIED
+}
+
 export async function settleVoucher(input: Parameters<typeof P.settleVoucher>[2]) {
   const c = await asPayer()
   return c ? P.settleVoucher(c.db, c.actor, input, c.as) : DENIED
