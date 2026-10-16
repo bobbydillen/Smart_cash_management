@@ -5,11 +5,11 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import SectionHeader from "@/components/section-header"
-import { Truck } from "lucide-react"
-import { loadCounterVendors, payVendor } from "@/app/actions/counter"
+import { Ticket, Truck } from "lucide-react"
+import { loadCounterVendors, loadVendorVouchers, payVendor, payVoucher } from "@/app/actions/counter"
 import { inr, todayIST } from "@/lib/report"
 import type { Payment } from "@/lib/types"
-import type { CounterVendor } from "@/lib/purchase-service"
+import type { CounterVendor, CounterVoucher } from "@/lib/purchase-service"
 
 const selectClass = "h-10 w-full rounded-lg border bg-card px-3 text-sm"
 
@@ -65,6 +65,10 @@ export default function VendorPaymentSection({
   const [note, setNote] = useState("")
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
+  // vouchers still waiting to be paid for the chosen vendor
+  const [vouchers, setVouchers] = useState<CounterVoucher[]>([])
+
+  const refreshVendors = () => loadCounterVendors().then(setVendors)
 
   useEffect(() => {
     loadCounterVendors().then((list) => {
@@ -72,6 +76,32 @@ export default function VendorPaymentSection({
       setLoading(false)
     })
   }, [])
+
+  useEffect(() => {
+    if (!vendorId) {
+      setVouchers([])
+      return
+    }
+    let stale = false
+    loadVendorVouchers(vendorId).then((list) => {
+      if (!stale) setVouchers(list)
+    })
+    return () => {
+      stale = true
+    }
+  }, [vendorId])
+
+  const payOneVoucher = async (v: CounterVoucher) => {
+    if (!confirm(`Pay voucher ${v.number} of ₹${inr(v.amount)} to ${vendor?.name} in cash? It will be recorded as Money out.`)) return
+    setError("")
+    setBusy(true)
+    const res = await payVoucher(v._id)
+    setBusy(false)
+    if (res.error) return setError(res.error)
+    if ("payments" in res) onPaid(res.payments as unknown as Payment[])
+    setVouchers(await loadVendorVouchers(vendorId))
+    refreshVendors()
+  }
 
   const vendor = vendors.find((v) => v._id === vendorId)
   const billTotal = Number(billAmount) || 0
@@ -95,6 +125,7 @@ export default function VendorPaymentSection({
     setBusy(false)
     if (res.error) return setError(res.error)
     if ("payments" in res) onPaid(res.payments as unknown as Payment[])
+    refreshVendors()
     setVendorId("")
     setBillNumber("")
     setBillDate(today)
@@ -130,11 +161,46 @@ export default function VendorPaymentSection({
                 {vendors.map((v) => (
                   <option key={v._id} value={v._id}>
                     {v.name}
+                    {v.vouchersPending > 0 ? `  ·  voucher ₹${inr(v.vouchersPending)} to pay` : ""}
                   </option>
                 ))}
               </select>
               {vendor?.items && <p className="mt-1 text-xs text-muted-foreground">Supplies: {vendor.items}</p>}
             </div>
+
+            {vouchers.length > 0 && (
+              <div className="rounded-xl border border-warning/30 bg-warning-soft p-3">
+                <div className="mb-2 flex items-center gap-2 text-sm font-medium text-warning">
+                  <Ticket className="size-4" /> Vouchers waiting to be paid to {vendor?.name}
+                </div>
+                <div className="space-y-2">
+                  {vouchers.map((v) => {
+                    const overdue = !!v.promisedDate && v.promisedDate < today
+                    return (
+                      <div key={v._id} className="flex flex-wrap items-center gap-2 rounded-lg bg-card px-3 py-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium">
+                            Voucher {v.number} · ₹{inr(v.amount)}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Given {v.issuedDate}
+                            {v.promisedDate && (
+                              <span className={overdue ? " font-medium text-danger" : ""}> · to be paid by {v.promisedDate}{overdue ? " (overdue)" : ""}</span>
+                            )}
+                          </div>
+                        </div>
+                        <Button size="sm" disabled={busy} onClick={() => payOneVoucher(v)}>
+                          Pay ₹{inr(v.amount)}
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Paid in cash from your drawer and recorded as Money out. For a new bill, fill in the details below.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div>

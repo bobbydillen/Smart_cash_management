@@ -1085,11 +1085,115 @@ export interface CounterVendor {
   _id: string
   name: string
   items?: string
+  /** vouchers we gave this vendor that are still waiting to be paid */
+  vouchersPending: number
+  voucherCount: number
 }
 
 export async function listCounterVendors(db: Db): Promise<CounterVendor[]> {
-  const docs = await vendorsCol(db).find({ active: true }).sort({ nameLower: 1 }).toArray()
-  return docs.map((d) => ({ _id: String(d._id), name: d.name as string, items: d.items as string | undefined }))
+  const [docs, pending] = await Promise.all([
+    vendorsCol(db).find({ active: true }).sort({ nameLower: 1 }).toArray(),
+    vouchersCol(db)
+      .aggregate([{ $match: { status: "pending" } }, { $group: { _id: "$vendorId", total: { $sum: "$amount" }, n: { $sum: 1 } } }])
+      .toArray(),
+  ])
+  const owed = new Map(pending.map((p) => [String(p._id), p]))
+  return docs.map((d) => ({
+    _id: String(d._id),
+    name: d.name as string,
+    items: d.items as string | undefined,
+    vouchersPending: round2((owed.get(String(d._id))?.total as number) || 0),
+    voucherCount: (owed.get(String(d._id))?.n as number) || 0,
+  }))
+}
+
+/** A voucher waiting to be paid, as a counter sees it. */
+export interface CounterVoucher {
+  _id: string
+  number: string
+  amount: number
+  issuedDate: string
+  promisedDate?: string
+}
+
+/** The vouchers still waiting to be paid for one vendor, oldest promise first. */
+export async function listVendorVouchersForCounter(db: Db, vendorId: unknown): Promise<CounterVoucher[]> {
+  const _id = parseObjectId(vendorId)
+  if (!_id) return []
+  const docs = await vouchersCol(db).find({ vendorId: _id, status: "pending" }).sort({ promisedDate: 1, issuedDate: 1 }).toArray()
+  return docs.map((d) => ({
+    _id: String(d._id),
+    number: d.number as string,
+    amount: d.amount as number,
+    issuedDate: d.issuedDate as string,
+    promisedDate: d.promisedDate as string | undefined,
+  }))
+}
+
+/**
+ * A shop counter pays a voucher that was given to a vendor earlier, in cash and in full.
+ *  - the voucher is settled (it is no longer owed)
+ *  - the payment is recorded as made by this counter
+ *  - the counter's page gets a locked "Money out" line, so its cash stays right
+ * Cancelling it from the counter's page puts the voucher back to pending.
+ */
+export async function settleVoucherFromCounter(db: Db, counter: CounterActor, voucherId: unknown) {
+  const vId = parseObjectId(voucherId)
+  if (!vId) return fail("Voucher not found")
+  const date = todayIST()
+
+  return atomic(db, async (session) => {
+    const entry = await entriesDocs(db).findOne(
+      { counterName: counter.counterName, date, status: "open", openingVerified: true },
+      { session }
+    )
+    if (!entry) stop("Your day must be open and the opening cash verified before paying a vendor")
+
+    const voucher = await vouchersCol(db).findOne({ _id: vId, status: "pending" }, { session })
+    if (!voucher) stop("This voucher is not waiting to be paid (it may have been paid already)")
+    const vendor = await vendorsCol(db).findOne({ _id: voucher!.vendorId }, { session })
+
+    const paymentId = new ObjectId()
+    const now = new Date()
+    await paymentsCol(db).insertOne(
+      {
+        _id: paymentId,
+        vendorId: voucher!.vendorId,
+        billId: null,
+        date,
+        amount: voucher!.amount,
+        mode: "cash",
+        settlesVoucherId: vId,
+        source: "counter",
+        sourceName: counter.counterName,
+        note: `Settles voucher ${voucher!.number}`,
+        paidBy: counter.counterName,
+        voided: false,
+        createdAt: now,
+        createdBy: counter.username,
+      },
+      { session }
+    )
+    await vouchersCol(db).updateOne(
+      { _id: vId },
+      { $set: { status: "settled", settledAt: now, settledPaymentId: paymentId } },
+      { session }
+    )
+
+    const line = {
+      description: `Vendor: ${vendor?.name ?? "—"} (voucher ${voucher!.number} paid)`,
+      amount: voucher!.amount,
+      type: "OUT",
+      time: now.toISOString(),
+      vendorPaymentId: paymentId.toString(),
+    }
+    await entriesDocs(db).updateOne(
+      { _id: entry!._id, status: "open" },
+      { $push: { payments: line } as any, $set: { updatedAt: now } },
+      { session }
+    )
+    return ok({ payments: plain<Document[]>([...(entry!.payments || []), line] as any) })
+  })
 }
 
 /** Pays an earlier voucher with cash or a cheque. */

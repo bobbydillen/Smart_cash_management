@@ -71,6 +71,65 @@ try {
   r = await S.createVendor(db, actor, { name: "Mega Foods" })
   const v2 = r.vendorId
 
+  // ===== a shop counter pays a voucher that was given to a vendor earlier
+  {
+    const { ObjectId } = await import(url("node_modules/mongodb/lib/index.js"))
+    const vc = { counterName: "Voucher Test Counter", username: "vt" }
+    await db.collection("entries").insertOne({ counterName: vc.counterName, date: today, status: "open", openingVerified: true, payments: [] })
+    r = await S.createVendor(db, actor, { name: "Voucher Test Traders" })
+    const vv = r.vendorId
+    r = await S.recordPayment(db, actor, { vendorId: vv, amount: 3000, mode: "voucher", voucher: { number: "V-CTR-1", promisedDate: today }, newBill: { billNumber: "VT-1", amount: 3000 } }, "admin")
+    t("a voucher is given for a new bill", !isErr(r), JSON.stringify(r))
+
+    const owe = async () => (await S.getVendorDetail(db, vv)).balance
+    let b = await owe()
+    t("the vendor is owed the voucher", approx(b.vouchersPending, 3000) && approx(b.totalToPay, 3000), JSON.stringify(b))
+
+    const listed = (await S.listCounterVendors(db)).find((x) => x._id === vv)
+    t("the counter's vendor list shows the pending voucher", listed.vouchersPending === 3000 && listed.voucherCount === 1, JSON.stringify(listed))
+    const pend = await S.listVendorVouchersForCounter(db, vv)
+    t("the counter can see the voucher to pay", pend.length === 1 && pend[0].number === "V-CTR-1" && pend[0].amount === 3000)
+    t("a vendor without vouchers shows none", (await S.listVendorVouchersForCounter(db, v1)).every((x) => x.number !== "V-CTR-1"))
+
+    t("an unknown voucher is refused", isErr(await S.settleVoucherFromCounter(db, vc, "nope")))
+    t("another counter without an open day cannot pay it", isErr(await S.settleVoucherFromCounter(db, { counterName: "No Such Counter", username: "x" }, pend[0]._id)))
+
+    const entryBefore = await db.collection("entries").findOne({ counterName: vc.counterName, date: today })
+    r = await S.settleVoucherFromCounter(db, vc, pend[0]._id)
+    t("the counter pays the voucher in cash", !isErr(r), JSON.stringify(r))
+    const entryAfter = await db.collection("entries").findOne({ counterName: vc.counterName, date: today })
+    const line = entryAfter.payments.find((x) => x.description.includes("V-CTR-1"))
+    t("it shows as Money out on the counter's page", entryAfter.payments.length === entryBefore.payments.length + 1 && line.type === "OUT" && line.amount === 3000 && !!line.vendorPaymentId, JSON.stringify(line))
+
+    b = await owe()
+    t("the vendor is no longer owed the voucher", approx(b.vouchersPending, 0) && approx(b.totalToPay, 0), JSON.stringify(b))
+    t("the voucher is settled", (await S.getVendorDetail(db, vv)).vouchers[0].status === "settled")
+    t("the vendor list no longer shows it", (await S.listCounterVendors(db)).find((x) => x._id === vv).vouchersPending === 0)
+    t("it cannot be paid twice", isErr(await S.settleVoucherFromCounter(db, vc, pend[0]._id)))
+    const settle = (await S.getVendorDetail(db, vv)).payments.find((x) => x.settlesVoucherId)
+    t("the payment is recorded as made by the counter", settle.source === "counter" && settle.sourceName === vc.counterName && settle.mode === "cash")
+    const tl = Pm.buildTimeline(await S.getVendorDetail(db, vv))
+    t("timeline ends on the vendor total", approx(tl[tl.length - 1].balanceAfter, 0), JSON.stringify(tl.map((e) => e.balanceAfter)))
+
+    // cancelling from the counter's page puts the voucher back
+    r = await S.cancelCounterVendorPayment(db, vc, line.vendorPaymentId)
+    t("the counter cancels it", !isErr(r), JSON.stringify(r))
+    b = await owe()
+    t("the voucher is owed again", approx(b.vouchersPending, 3000) && approx(b.totalToPay, 3000), JSON.stringify(b))
+    t("the Money out line is gone", !(await db.collection("entries").findOne({ counterName: vc.counterName, date: today })).payments.some((x) => x.description.includes("V-CTR-1")))
+    t("it can be paid again after cancelling", !isErr(await S.settleVoucherFromCounter(db, vc, pend[0]._id)))
+    const again = (await db.collection("entries").findOne({ counterName: vc.counterName, date: today })).payments.find((x) => x.description.includes("V-CTR-1"))
+    await S.cancelCounterVendorPayment(db, vc, again.vendorPaymentId)
+
+    // leave nothing behind for the checks that follow
+    const vid = new ObjectId(vv)
+    await db.collection("vouchers").deleteMany({ vendorId: vid })
+    await db.collection("purchase_payments").deleteMany({ vendorId: vid })
+    await db.collection("purchase_bills").deleteMany({ vendorId: vid })
+    await db.collection("vendors").deleteOne({ _id: vid })
+    await db.collection("entries").deleteMany({ counterName: vc.counterName })
+  }
+
   // ===== goods returned to a vendor (expired / damaged): comes off what we owe
   {
     r = await S.createVendor(db, actor, { name: "Return Test Foods" })

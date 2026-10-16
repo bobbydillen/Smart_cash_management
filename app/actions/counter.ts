@@ -677,6 +677,27 @@ export async function loadCounterVendors ()
   return Purchase.listCounterVendors( ctx.db )
 }
 
+/** The vouchers still waiting to be paid for a vendor, so the counter can pay them. */
+export async function loadVendorVouchers ( vendorId: string )
+{
+  const ctx = await counterContext()
+  if ( "error" in ctx ) return []
+  return Purchase.listVendorVouchersForCounter( ctx.db, vendorId )
+}
+
+/** Pay a voucher that was given to a vendor earlier, in cash. */
+export async function payVoucher ( voucherId: string )
+{
+  const ctx = await counterContext()
+  if ( "error" in ctx ) return ctx
+  const user = await getSession()
+  return Purchase.settleVoucherFromCounter(
+    ctx.db,
+    { counterName: ctx.counterName, username: user?.username ?? ctx.counterName },
+    voucherId
+  )
+}
+
 /** Pay a NEW bill: the bill is recorded and paid (fully or in part) in one step. */
 export async function payVendor (
   input: {
