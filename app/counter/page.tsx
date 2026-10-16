@@ -16,7 +16,7 @@ export default async function CounterPage ()
   // 🔐 ONLY counter can access /counter
   if ( user.role !== "counter" )
   {
-    redirect( "/admin" )
+    redirect( "/" )
   }
 
   // 📦 fetch today's entry

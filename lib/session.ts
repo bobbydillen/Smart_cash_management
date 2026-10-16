@@ -27,7 +27,8 @@ export async function createSession(userId: string) {
   return sessionId
 }
 
-export async function getSession(): Promise<User | null> {
+/** The signed-in user, without the password hash. */
+export async function getSession(): Promise<Omit<User, "password"> | null> {
   const cookieStore = await cookies()
   const sessionId = cookieStore.get("session")?.value
 
@@ -45,9 +46,9 @@ export async function getSession(): Promise<User | null> {
     return null
   }
 
-  const user = await db.collection<User>("users").findOne({
-    _id: new ObjectId(session.userId),
-  })
+  const user = await db
+    .collection<User>("users")
+    .findOne({ _id: new ObjectId(session.userId) }, { projection: { password: 0 } })
 
   return user
 }

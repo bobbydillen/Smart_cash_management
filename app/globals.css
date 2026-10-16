@@ -4,31 +4,47 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.98 0.002 264);
-  --foreground: oklch(0.15 0.01 264);
+  --background: oklch(0.978 0.004 255);
+  --foreground: oklch(0.2 0.02 262);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.01 264);
+  --card-foreground: oklch(0.2 0.02 262);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.01 264);
-  --primary: oklch(0.42 0.15 264);
+  --popover-foreground: oklch(0.2 0.02 262);
+  --primary: oklch(0.5 0.2 268);
   --primary-foreground: oklch(0.99 0 0);
-  --secondary: oklch(0.96 0.01 264);
-  --secondary-foreground: oklch(0.15 0.01 264);
-  --muted: oklch(0.96 0.01 264);
-  --muted-foreground: oklch(0.52 0.02 264);
-  --accent: oklch(0.28 0.12 210);
-  --accent-foreground: oklch(0.99 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  --secondary: oklch(0.962 0.006 255);
+  --secondary-foreground: oklch(0.25 0.02 262);
+  --muted: oklch(0.962 0.006 255);
+  --muted-foreground: oklch(0.52 0.02 258);
+  --accent: oklch(0.955 0.025 268);
+  --accent-foreground: oklch(0.38 0.17 268);
+  --destructive: oklch(0.577 0.225 27);
   --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.9 0.01 264);
-  --input: oklch(0.9 0.01 264);
-  --ring: oklch(0.42 0.15 264);
+  --border: oklch(0.915 0.008 255);
+  --input: oklch(0.9 0.01 255);
+  --ring: oklch(0.5 0.2 268);
+
+  /* status tones: solid colour + soft background */
+  --success: oklch(0.55 0.15 150);
+  --success-soft: oklch(0.96 0.04 150);
+  --warning: oklch(0.6 0.15 65);
+  --warning-soft: oklch(0.97 0.05 85);
+  --info: oklch(0.52 0.17 250);
+  --info-soft: oklch(0.96 0.03 250);
+  --danger: oklch(0.55 0.21 27);
+  --danger-soft: oklch(0.97 0.03 20);
+
+  /* categorical series colours for charts / split bars */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
-  --radius: 0.5rem;
+  --radius: 0.75rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -75,6 +91,18 @@
 }
 
 @theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
   /* optional: --font-sans, --font-serif, --font-mono if they are applied in the layout.tsx */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -120,5 +148,20 @@
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+  /* numbers line up in columns everywhere */
+  table, input[type='number'] {
+    font-variant-numeric: tabular-nums;
+  }
+  /* no spinner arrows on number inputs: they are easy to hit by accident */
+  input[type='number']::-webkit-outer-spin-button,
+  input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type='number'] {
+    -moz-appearance: textfield;
   }
 }

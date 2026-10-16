@@ -16,9 +16,9 @@ export default async function PasswordsPage() {
 
   const result = await getAllUsers()
 
-  if ("error" in result) {
+  if (!("users" in result)) {
     redirect("/admin")
   }
 
-  return <PasswordManagement adminUser={user} users={result.users} />
+  return <PasswordManagement users={result.users} />
 }

@@ -1,6 +1,6 @@
 import { getSerializedSession } from "@/lib/session"
 import { redirect } from "next/navigation"
-import { getAllEntries } from "@/app/actions/admin"
+import { getAllEntries, getCounterNames } from "@/app/actions/admin"
 import AdminDashboard from "@/components/admin-dashboard"
 
 export default async function AdminPage() {
@@ -11,10 +11,10 @@ export default async function AdminPage() {
   }
 
   if (user.role !== "admin") {
-    redirect("/counter")
+    redirect("/")
   }
 
-  const entries = await getAllEntries()
+  const [entries, counterNames] = await Promise.all([getAllEntries(), getCounterNames()])
 
-  return <AdminDashboard user={user} initialEntries={entries} />
+  return <AdminDashboard initialEntries={entries} counterNames={counterNames} />
 }

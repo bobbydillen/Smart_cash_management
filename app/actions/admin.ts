@@ -2,63 +2,46 @@
 
 import { getDatabase } from "@/lib/mongodb"
 import { getSession } from "@/lib/session"
-import type { DayEntry, DenominationCount } from "@/lib/types"
+import type { DayEntry } from "@/lib/types"
+import {
+  calculateCashSales,
+  calculateClosingCash,
+  calculateExpectedCashWithInOut,
+} from "@/lib/types"
+import {
+  carryForward,
+  entriesCollection,
+  findPreviousClosedEntry,
+  parseObjectId,
+  serializeEntry,
+  type EntryDoc,
+} from "@/lib/entries"
+import { isDateString, parseMoney } from "@/lib/validation"
+import { fail, ok } from "@/lib/action-result"
+import { todayIST } from "@/lib/report"
 import { redirect } from "next/navigation"
-import { ObjectId } from "mongodb"
 
-/* =====================================================
-   SERIALIZER
-   ===================================================== */
 
-function serializeEntry(entry: any): DayEntry {
-  return {
-    ...entry,
-    _id: entry._id?.toString(),
-    date:
-      typeof entry.date === "string"
-        ? entry.date
-        : entry.date?.toISOString?.() || entry.date,
-    createdAt:
-      entry.createdAt instanceof Date
-        ? entry.createdAt.toISOString()
-        : entry.createdAt,
-    updatedAt:
-      entry.updatedAt instanceof Date
-        ? entry.updatedAt.toISOString()
-        : entry.updatedAt,
-    submittedAt:
-      entry.submittedAt instanceof Date
-        ? entry.submittedAt.toISOString()
-        : entry.submittedAt,
-    confirmedAt:
-      entry.confirmedAt instanceof Date
-        ? entry.confirmedAt.toISOString()
-        : entry.confirmedAt,
-    payments:
-      entry.payments?.map((p: any) => ({
-        ...p,
-        time: p.time instanceof Date ? p.time.toISOString() : p.time,
-      })) || [],
-  }
-}
-
-/* =====================================================
-   GET ALL ENTRIES (ADMIN + SUPERVISOR)
-   ===================================================== */
-
-export async function getAllEntries(date?: string): Promise<DayEntry[]> {
+/** Admin or supervisor, or the visitor is sent to the login page. */
+async function requireViewer() {
   const user = await getSession()
-
-  // ✅ Allow admin + supervisor
   if (!user || (user.role !== "admin" && user.role !== "supervisor")) {
     redirect("/")
   }
+  return user
+}
+
+/* =====================================================
+   READ (ADMIN + SUPERVISOR)
+   ===================================================== */
+
+export async function getAllEntries(date?: string): Promise<DayEntry[]> {
+  await requireViewer()
+
+  const targetDate = date && isDateString(date) ? date : todayIST()
 
   const db = await getDatabase()
-  const targetDate = date || new Date().toISOString().split("T")[0]
-
-  const entries = await db
-    .collection<DayEntry>("entries")
+  const entries = await entriesCollection(db)
     .find({ date: targetDate })
     .sort({ counterName: 1 })
     .toArray()
@@ -66,41 +49,53 @@ export async function getAllEntries(date?: string): Promise<DayEntry[]> {
   return entries.map(serializeEntry)
 }
 
-/* =====================================================
-   GET ENTRY BY ID (ADMIN + SUPERVISOR)
-   ===================================================== */
+/**
+ * Every shop counter that has a login. A counter's day is only created when it
+ * signs in, so the dashboard uses this list to show counters that have not started.
+ */
+export async function getCounterNames(): Promise<string[]> {
+  await requireViewer()
+  const db = await getDatabase()
+  const users = await db.collection("users").find({ role: "counter" }).toArray()
+  return users
+    .map((u: any) => u.counterName as string)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b))
+}
 
-export async function getEntryById(id: string): Promise<DayEntry | null> {
-  const user = await getSession()
+/** Entries for a date range, used by the weekly / monthly reports. */
+export async function getEntriesInRange(start: string, end: string): Promise<DayEntry[]> {
+  await requireViewer()
 
-  if (!user || (user.role !== "admin" && user.role !== "supervisor")) {
-    redirect("/")
-  }
+  if (!isDateString(start) || !isDateString(end) || start > end) return []
+
+  // keep one request to roughly a quarter
+  const days = (Date.parse(end + "T00:00:00Z") - Date.parse(start + "T00:00:00Z")) / 86_400_000
+  if (days > 92) return []
 
   const db = await getDatabase()
-  const entry = await db
-    .collection<DayEntry>("entries")
-    .findOne({ _id: new ObjectId(id) })
+  const entries = await entriesCollection(db)
+    .find({ date: { $gte: start, $lte: end } })
+    .sort({ date: 1, counterName: 1 })
+    .toArray()
 
-  if (!entry) return null
-
-  return serializeEntry(entry)
+  return entries.map(serializeEntry)
 }
 
 /* =====================================================
-   CONFIRM ENTRY (ADMIN ONLY)
+   CONFIRM / UNLOCK (ADMIN ONLY)
    ===================================================== */
 
 export async function confirmEntry(id: string) {
   const user = await getSession()
-  if (!user || user.role !== "admin") {
-    return { error: "Unauthorized" }
-  }
+  if (!user || user.role !== "admin") return fail("Unauthorized")
+
+  const _id = parseObjectId(id)
+  if (!_id) return fail("Invalid entry id")
 
   const db = await getDatabase()
-
-  await db.collection<DayEntry>("entries").updateOne(
-    { _id: new ObjectId(id) },
+  const res = await entriesCollection(db).updateOne(
+    { _id, status: "submitted" },
     {
       $set: {
         status: "confirmed",
@@ -110,66 +105,110 @@ export async function confirmEntry(id: string) {
       },
     }
   )
+  if (res.matchedCount === 0) return fail("Only a submitted day can be confirmed")
 
-  return { success: true }
+  return ok()
 }
-
-/* =====================================================
-   UNLOCK ENTRY (ADMIN ONLY)
-   ===================================================== */
 
 export async function unlockEntry(id: string) {
   const user = await getSession()
-  if (!user || user.role !== "admin") {
-    return { error: "Unauthorized" }
-  }
+  if (!user || user.role !== "admin") return fail("Unauthorized")
+
+  const _id = parseObjectId(id)
+  if (!_id) return fail("Invalid entry id")
 
   const db = await getDatabase()
-
-  await db.collection<DayEntry>("entries").updateOne(
-    { _id: new ObjectId(id) },
+  const res = await entriesCollection(db).updateOne(
+    { _id, status: { $in: ["submitted", "confirmed"] } },
     {
-      $set: {
-        status: "open",
-        updatedAt: new Date(),
-      },
-      $unset: {
-        submittedAt: "",
-        confirmedAt: "",
-        confirmedBy: "",
-      },
+      $set: { status: "open", updatedAt: new Date() },
+      $unset: { submittedAt: "", confirmedAt: "", confirmedBy: "" },
     }
   )
+  if (res.matchedCount === 0) return fail("This day is already open")
 
-  return { success: true }
+  return ok()
 }
 
 /* =====================================================
-   UPDATE OPENING CASH (ADMIN ONLY)
+   OPENING CASH OVERRIDE (ADMIN ONLY)
    ===================================================== */
 
-export async function updateEntryOpeningCash(
-  id: string,
-  openingCash: number,
-  openingDenominations: DenominationCount
-) {
-  const user = await getSession()
-  if (!user || user.role !== "admin") {
-    return { error: "Unauthorized" }
-  }
-
-  if (!id) {
-    return { error: "Invalid entry id" }
-  }
+/**
+ * Keeps expected / actual / shortage in sync after an admin edit, so the
+ * dashboard shows the same figures as the detail view. Open entries have no
+ * submitted totals yet, so they are skipped.
+ */
+async function recalculateSubmittedTotals(entry: EntryDoc) {
+  if (entry.status === "open") return
 
   const db = await getDatabase()
+  const cashSales = calculateCashSales(entry.sales, entry.counterName === "Smart Fashion (Both)")
+  const expectedCash = calculateExpectedCashWithInOut(
+    entry.openingCash,
+    cashSales,
+    entry.payments || []
+  )
+  const actualCash = calculateClosingCash(entry.closingDenominations)
 
-  await db.collection<DayEntry>("entries").updateOne(
-    { _id: new ObjectId(id) },
+  await entriesCollection(db).updateOne(
+    { _id: entry._id },
     {
       $set: {
-        openingCash,
-        openingDenominations,
+        submittedExpectedCash: expectedCash,
+        submittedActualCash: actualCash,
+        submittedShortage: expectedCash - actualCash,
+      },
+    }
+  )
+}
+
+/** For the details popup: what the opening cash would be without any override. */
+export async function getOpeningOriginal(id: string) {
+  const user = await getSession()
+  if (!user || user.role !== "admin") return fail("Unauthorized")
+
+  const _id = parseObjectId(id)
+  if (!_id) return fail("Invalid entry id")
+
+  const db = await getDatabase()
+  const entry = await entriesCollection(db).findOne({ _id })
+  if (!entry) return fail("Entry not found")
+
+  const prev = await findPreviousClosedEntry(db, entry.counterName, entry.date)
+  return ok({ cash: carryForward(prev).cash })
+}
+
+export async function updateEntryOpeningCash(id: string, openingCash: number) {
+  const user = await getSession()
+  if (!user || user.role !== "admin") return fail("Unauthorized")
+
+  const _id = parseObjectId(id)
+  if (!_id) return fail("Invalid entry id")
+
+  const cash = parseMoney(openingCash)
+  if (cash === null) return fail("Enter a valid opening cash amount")
+
+  const db = await getDatabase()
+  const col = entriesCollection(db)
+  const current = await col.findOne({ _id })
+  if (!current) return fail("Entry not found")
+
+  await col.updateOne(
+    { _id },
+    {
+      $set: {
+        openingCash: cash,
+        // remember who changed it and the very first amount, so it can be reverted
+        ...(current.openingOverride
+          ? {}
+          : {
+              openingOverride: {
+                by: user.username,
+                at: new Date(),
+                fromCash: current.openingCash,
+              },
+            }),
         openingVerified: true,
         openingVerifiedAt: new Date(),
         updatedAt: new Date(),
@@ -177,37 +216,44 @@ export async function updateEntryOpeningCash(
     }
   )
 
-  return { success: true }
+  await recalculateSubmittedTotals({ ...current, openingCash: cash })
+
+  return ok()
 }
 
-/* =====================================================
-   UPDATE CLOSING CASH (ADMIN ONLY)
-   ===================================================== */
-
-export async function updateEntryClosingCash(
-  id: string,
-  denominations: DenominationCount
-) {
+/**
+ * Removes an override: the opening cash goes back to what the previous closed
+ * day kept, the same rule used when a day is first created.
+ */
+export async function revertOpeningOverride(id: string) {
   const user = await getSession()
-  if (!user || user.role !== "admin") {
-    return { error: "Unauthorized" }
-  }
+  if (!user || user.role !== "admin") return fail("Unauthorized")
 
-  if (!id) {
-    return { error: "Invalid entry id" }
-  }
+  const _id = parseObjectId(id)
+  if (!_id) return fail("Invalid entry id")
 
   const db = await getDatabase()
+  const col = entriesCollection(db)
+  const entry = await col.findOne({ _id })
+  if (!entry) return fail("Entry not found")
 
-  await db.collection<DayEntry>("entries").updateOne(
-    { _id: new ObjectId(id) },
+  const { cash, denominations } = carryForward(
+    await findPreviousClosedEntry(db, entry.counterName, entry.date)
+  )
+
+  await col.updateOne(
+    { _id },
     {
       $set: {
-        closingDenominations: denominations,
+        openingCash: cash,
+        openingDenominations: denominations,
         updatedAt: new Date(),
       },
+      $unset: { openingOverride: "" },
     }
   )
 
-  return { success: true }
+  await recalculateSubmittedTotals({ ...entry, openingCash: cash })
+
+  return ok({ openingCash: cash })
 }

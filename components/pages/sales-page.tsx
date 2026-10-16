@@ -10,22 +10,30 @@ import
   getOpeningCashForDate,
 } from "@/app/actions/counter"
 import type { DayEntry, SalesData } from "@/lib/types"
-import type { User } from "@/lib/auth"
+import type { SerializedUser } from "@/lib/session"
 import
 {
   calculateCashSales,
   calculatePaymentSummary,
 } from "@/lib/types"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, TrendingUp, Banknote, Check } from "lucide-react"
+import SectionHeader from "@/components/section-header"
 
-/* ================= FIXED NUMBER INPUT ================= */
+/* ================= MONEY INPUT ================= */
 
 const FixedNumberInput = ( props: React.ComponentProps<typeof Input> ) => (
-  <Input
-    { ...props }
-    type="number"
-    onWheel={ e => ( e.target as HTMLInputElement ).blur() }
-  />
+  <div className="relative">
+    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+      ₹
+    </span>
+    <Input
+      { ...props }
+      type="number"
+      inputMode="decimal"
+      className="pl-7"
+      onWheel={ e => ( e.target as HTMLInputElement ).blur() }
+    />
+  </div>
 )
 
 /* ================= PROPS ================= */
@@ -33,18 +41,19 @@ const FixedNumberInput = ( props: React.ComponentProps<typeof Input> ) => (
 interface SalesPageProps
 {
   entry: DayEntry
-  refreshEntry: () => Promise<void>
   isReadOnly: boolean
-  user: User
+  user: SerializedUser
+  /** updates the shared entry so the other pages see the saved sales straight away */
+  onEntryPatch?: ( patch: Partial<DayEntry> ) => void
 }
 
 /* ================= COMPONENT ================= */
 
 export default function SalesPage ( {
   entry,
-  refreshEntry,
   isReadOnly,
   user,
+  onEntryPatch,
 }: SalesPageProps )
 {
 
@@ -75,10 +84,7 @@ export default function SalesPage ( {
   {
     getOpeningCashForDate( entry.date ).then( res =>
     {
-      if ( !res?.error && typeof res.cash === "number" )
-      {
-        setOpeningCash( res.cash )
-      }
+      if ( "cash" in res ) setOpeningCash( res.cash )
     } )
   }, [ entry.date, entry.updatedAt ] )
 
@@ -94,11 +100,31 @@ export default function SalesPage ( {
     setHasUnsavedChanges( true )
   }
 
+  const [ saving, setSaving ] = useState( false )
+  const [ saveError, setSaveError ] = useState( "" )
+
   const handleSave = async () =>
   {
-    await updateSales( sales, entry.date )
-    setSavedSales( sales )
-    setHasUnsavedChanges( false )
+    setSaveError( "" )
+    setSaving( true )
+    try
+    {
+      const res = await updateSales( sales, entry.date )
+      if ( res.error )
+      {
+        setSaveError( res.error )
+        return
+      }
+      setSavedSales( sales )
+      setHasUnsavedChanges( false )
+      onEntryPatch?.( { sales } )
+    } catch
+    {
+      setSaveError( "Could not save. Check your connection and try again." )
+    } finally
+    {
+      setSaving( false )
+    }
   }
 
   /* ================= CALCULATIONS ================= */
@@ -113,31 +139,20 @@ export default function SalesPage ( {
   /* ================= JSX ================= */
 
   return (
-    <div className="space-y-6">
-
-      {/* UNSAVED WARNING */ }
-      { hasUnsavedChanges && (
-        <Card className="p-4 border-orange-500 bg-orange-50">
-          <div className="flex items-center gap-2 text-orange-700">
-            <AlertCircle className="w-5 h-5" />
-            <span className="font-medium">
-              You have unsaved changes. Click “Save Sales”.
-            </span>
-          </div>
-        </Card>
-      ) }
+    <div className="space-y-5">
 
       {/* SALES ENTRY */ }
-      <Card className="p-6">
-        <h2 className="text-xl font-bold mb-4">
-          Sales Entry (End of Day)
-        </h2>
+      <Card className="p-5">
+        <SectionHeader
+          icon={ <TrendingUp className="size-4" /> }
+          title="Sales entry"
+          subtitle="Copy the day's totals from the billing software"
+        />
 
         {/* NORMAL COUNTER */ }
         { !isFashionBoth ? (
-          <div className="space-y-4">
-
-            <LabeledInput label="Total Sales">
+          <div className="mt-4 space-y-4">
+            <LabeledInput label="Total sales">
               <FixedNumberInput
                 value={ inputs.totalSales ?? sales.totalSales.toString() }
                 onChange={ e => handleChange( "totalSales", e.target.value ) }
@@ -145,110 +160,133 @@ export default function SalesPage ( {
               />
             </LabeledInput>
 
-            <LabeledInput label="Card / UPI">
-              <FixedNumberInput
-                value={ inputs.cardUpiSales ?? sales.cardUpiSales.toString() }
-                onChange={ e => handleChange( "cardUpiSales", e.target.value ) }
-                disabled={ isReadOnly }
-              />
-            </LabeledInput>
+            <div className="grid grid-cols-2 gap-3">
+              <LabeledInput label="Card / UPI">
+                <FixedNumberInput
+                  value={ inputs.cardUpiSales ?? sales.cardUpiSales.toString() }
+                  onChange={ e => handleChange( "cardUpiSales", e.target.value ) }
+                  disabled={ isReadOnly }
+                />
+              </LabeledInput>
 
-            <LabeledInput label="Credit Sales">
-              <FixedNumberInput
-                value={ inputs.creditSales ?? sales.creditSales.toString() }
-                onChange={ e => handleChange( "creditSales", e.target.value ) }
-                disabled={ isReadOnly }
-              />
-            </LabeledInput>
+              <LabeledInput label="Credit">
+                <FixedNumberInput
+                  value={ inputs.creditSales ?? sales.creditSales.toString() }
+                  onChange={ e => handleChange( "creditSales", e.target.value ) }
+                  disabled={ isReadOnly }
+                />
+              </LabeledInput>
+            </div>
 
-            <PreviewCash label="Cash Sales (Preview)" value={ previewCashSales } />
+            <PreviewCash label="Cash sales" value={ previewCashSales } />
           </div>
         ) : (
           /* SMART FASHION (BOTH) */
-          <div className="space-y-6">
+          <div className="mt-4 space-y-5">
 
-            {/* SMART MART */ }
             <Section title="Smart Mart">
-              <LabeledInput label="Total Sales">
+              <LabeledInput label="Total sales">
                 <FixedNumberInput
                   value={ inputs.martTotalSales ?? ( sales.martTotalSales ?? 0 ).toString() }
                   onChange={ e => handleChange( "martTotalSales", e.target.value ) }
                   disabled={ isReadOnly }
                 />
               </LabeledInput>
-
-              <LabeledInput label="Card / UPI">
-                <FixedNumberInput
-                  value={ inputs.martCardUpi ?? ( sales.martCardUpi ?? 0 ).toString() }
-                  onChange={ e => handleChange( "martCardUpi", e.target.value ) }
-                  disabled={ isReadOnly }
-                />
-              </LabeledInput>
-
-              <LabeledInput label="Credit">
-                <FixedNumberInput
-                  value={ inputs.martCredit ?? ( sales.martCredit ?? 0 ).toString() }
-                  onChange={ e => handleChange( "martCredit", e.target.value ) }
-                  disabled={ isReadOnly }
-                />
-              </LabeledInput>
+              <div className="grid grid-cols-2 gap-3">
+                <LabeledInput label="Card / UPI">
+                  <FixedNumberInput
+                    value={ inputs.martCardUpi ?? ( sales.martCardUpi ?? 0 ).toString() }
+                    onChange={ e => handleChange( "martCardUpi", e.target.value ) }
+                    disabled={ isReadOnly }
+                  />
+                </LabeledInput>
+                <LabeledInput label="Credit">
+                  <FixedNumberInput
+                    value={ inputs.martCredit ?? ( sales.martCredit ?? 0 ).toString() }
+                    onChange={ e => handleChange( "martCredit", e.target.value ) }
+                    disabled={ isReadOnly }
+                  />
+                </LabeledInput>
+              </div>
             </Section>
 
-            {/* SMART FASHION */ }
             <Section title="Smart Fashion">
-              <LabeledInput label="Total Sales">
+              <LabeledInput label="Total sales">
                 <FixedNumberInput
                   value={ inputs.fashionTotalSales ?? ( sales.fashionTotalSales ?? 0 ).toString() }
                   onChange={ e => handleChange( "fashionTotalSales", e.target.value ) }
                   disabled={ isReadOnly }
                 />
               </LabeledInput>
-
-              <LabeledInput label="Card / UPI">
-                <FixedNumberInput
-                  value={ inputs.fashionCardUpi ?? ( sales.fashionCardUpi ?? 0 ).toString() }
-                  onChange={ e => handleChange( "fashionCardUpi", e.target.value ) }
-                  disabled={ isReadOnly }
-                />
-              </LabeledInput>
-
-              <LabeledInput label="Credit">
-                <FixedNumberInput
-                  value={ inputs.fashionCredit ?? ( sales.fashionCredit ?? 0 ).toString() }
-                  onChange={ e => handleChange( "fashionCredit", e.target.value ) }
-                  disabled={ isReadOnly }
-                />
-              </LabeledInput>
+              <div className="grid grid-cols-2 gap-3">
+                <LabeledInput label="Card / UPI">
+                  <FixedNumberInput
+                    value={ inputs.fashionCardUpi ?? ( sales.fashionCardUpi ?? 0 ).toString() }
+                    onChange={ e => handleChange( "fashionCardUpi", e.target.value ) }
+                    disabled={ isReadOnly }
+                  />
+                </LabeledInput>
+                <LabeledInput label="Credit">
+                  <FixedNumberInput
+                    value={ inputs.fashionCredit ?? ( sales.fashionCredit ?? 0 ).toString() }
+                    onChange={ e => handleChange( "fashionCredit", e.target.value ) }
+                    disabled={ isReadOnly }
+                  />
+                </LabeledInput>
+              </div>
             </Section>
 
-            <PreviewCash label="Total Cash Sales" value={ previewCashSales } />
+            <PreviewCash label="Total cash sales" value={ previewCashSales } />
           </div>
         ) }
 
+        {/* UNSAVED WARNING + SAVE */ }
         { !isReadOnly && (
-          <Button
-            onClick={ handleSave }
-            disabled={ !hasUnsavedChanges }
-            className="w-full mt-4"
-          >
-            { hasUnsavedChanges ? "Save Sales" : "Saved ✓" }
-          </Button>
+          <div className="mt-5 space-y-2">
+            { saveError && (
+              <div className="flex items-center gap-2 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">
+                <AlertCircle className="size-4 shrink-0" />
+                { saveError }
+              </div>
+            ) }
+            { hasUnsavedChanges && (
+              <div className="flex items-center gap-2 rounded-lg bg-warning-soft px-3 py-2 text-sm text-warning">
+                <AlertCircle className="size-4 shrink-0" />
+                You have unsaved changes. Tap “Save sales”.
+              </div>
+            ) }
+            <Button
+              onClick={ handleSave }
+              disabled={ !hasUnsavedChanges || saving }
+              size="lg"
+              variant={ hasUnsavedChanges ? "default" : "outline" }
+              className="w-full"
+            >
+              { saving ? "Saving…" : hasUnsavedChanges ? "Save sales" : <><Check /> Saved</> }
+            </Button>
+          </div>
         ) }
       </Card>
 
       {/* EXPECTED CASH */ }
-      <Card className="p-6">
-        <h3 className="font-semibold mb-4">Expected Cash (Saved)</h3>
+      <Card className="p-5">
+        <SectionHeader
+          icon={ <Banknote className="size-4" /> }
+          title="Expected cash"
+          subtitle="Based on the saved figures"
+        />
 
-        <SummaryRow label="Opening Cash" value={ openingCash } />
-        <SummaryRow label="+ Cash Sales" value={ savedCashSales } green />
-        <SummaryRow label="+ Money In" value={ totalIn } green />
-        <SummaryRow label="- Money Out" value={ totalOut } red />
+        <div className="mt-4 space-y-2">
+          <SummaryRow label="Opening cash" value={ openingCash } />
+          <SummaryRow label="Cash sales" value={ savedCashSales } sign="+" tone="success" />
+          <SummaryRow label="Money in" value={ totalIn } sign="+" tone="success" />
+          <SummaryRow label="Money out" value={ totalOut } sign="−" tone="danger" />
+        </div>
 
-        <div className="border-t pt-2 flex justify-between font-bold">
-          <span>Expected Cash</span>
-          <span className="text-primary text-lg">
-            ₹{ expectedCash.toFixed( 2 ) }
+        <div className="mt-4 flex items-center justify-between rounded-xl bg-accent px-4 py-3">
+          <span className="text-sm font-medium text-accent-foreground">Expected cash</span>
+          <span className="text-xl font-semibold text-accent-foreground">
+            ₹{ expectedCash.toLocaleString( "en-IN", { minimumFractionDigits: 2 } ) }
           </span>
         </div>
       </Card>
@@ -261,33 +299,34 @@ export default function SalesPage ( {
 
 const LabeledInput = ( { label, children }: any ) => (
   <div>
-    <label className="text-sm font-medium mb-1 block">{ label }</label>
+    <label className="mb-1.5 block text-sm font-medium">{ label }</label>
     { children }
   </div>
 )
 
 const Section = ( { title, children }: any ) => (
-  <div>
-    <h3 className="font-semibold mb-3">{ title }</h3>
-    <div className="space-y-3">{ children }</div>
+  <div className="space-y-3 rounded-xl border p-4">
+    <h3 className="text-sm font-semibold">{ title }</h3>
+    { children }
   </div>
 )
 
 const PreviewCash = ( { label, value }: any ) => (
-  <div className="bg-secondary p-4 rounded-lg">
-    <div className="flex justify-between font-bold">
-      <span>{ label }</span>
-      <span>₹{ value.toFixed( 2 ) }</span>
-    </div>
+  <div className="flex items-center justify-between rounded-xl bg-secondary px-4 py-3">
+    <span className="text-sm font-medium">{ label }</span>
+    <span className="text-lg font-semibold">
+      ₹{ value.toLocaleString( "en-IN", { minimumFractionDigits: 2 } ) }
+    </span>
   </div>
 )
 
-const SummaryRow = ( { label, value, green, red }: any ) => (
-  <div
-    className={ `flex justify-between text-sm ${ green ? "text-green-600" : red ? "text-red-600" : ""
-      }` }
-  >
-    <span>{ label }</span>
-    <span>₹{ value.toFixed( 2 ) }</span>
+const SummaryRow = ( { label, value, sign, tone }: any ) => (
+  <div className="flex items-center justify-between text-sm">
+    <span className="text-muted-foreground">{ label }</span>
+    <span
+      className={ `font-medium ${ tone === "success" ? "text-success" : tone === "danger" ? "text-danger" : "" }` }
+    >
+      { sign }₹{ value.toLocaleString( "en-IN", { minimumFractionDigits: 2 } ) }
+    </span>
   </div>
 )

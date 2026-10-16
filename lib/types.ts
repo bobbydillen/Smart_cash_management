@@ -6,6 +6,8 @@ export interface Payment
   description: string
   amount: number
   type?: "IN" | "OUT" // optional for backward compatibility
+  transferId?: string // set when this movement is one side of a cash transfer
+  vendorPaymentId?: string // set when this was a payment to a vendor (see the purchase records)
 }
 
 /* ================= SALES ================= */
@@ -56,13 +58,31 @@ export interface DayEntry
 
   /* ✅ Opening verification (NO calculation impact) */
   openingVerified?: boolean
-  openingVerifiedAt?: Date | string
+  openingVerifiedAt?: Date | string | null
+  openingVerifiedBy?: string
+  /** "verified" = counted and matched; "not_verified" = flagged with a note */
+  openingVerifyStatus?: "verified" | "not_verified"
+  openingNote?: string
+  /** set while an admin override is active; removed again by a revert */
+  openingOverride?: {
+    by: string
+    at: Date | string
+    fromCash: number
+  }
+  /** earlier versions of the opening check, kept when it is edited */
+  openingHistory?: Array<{
+    status: "verified" | "not_verified"
+    by?: string
+    note?: string
+    at?: Date | string | null
+    replacedAt: Date | string
+  }>
+  openingCheckedDenoms?: string[]
 
   /* ✅ Closing person name */
   closedBy?: string
 
   openingCash: number
-  openingCoins: number
   openingDenominations: DenominationCount
 
   payments: Payment[]
@@ -71,6 +91,14 @@ export interface DayEntry
   closingDenominations: DenominationCount
   nextDayOpeningCash?: number
   nextDayOpeningDenominations?: DenominationCount
+  /** notes amount the counter asked for; set when the next-day opening is confirmed */
+  nextDayNotesRequested?: number
+  /** available-cash rows the counter ticked, as "<denomination>:<count>" */
+  availableCheckedDenoms?: string[]
+  /** counter confirmed the available cash was checked (tied to the amount below) */
+  availableCashHandedOver?: boolean
+  availableCashHandedOverAmount?: number
+  availableCashHandedOverAt?: Date | string | null
 
   submittedExpectedCash?: number
   submittedActualCash?: number
@@ -89,18 +117,7 @@ export interface DayEntry
 
 /* ================= CALCULATIONS ================= */
 
-/**
- * OLD helper – keeps backward compatibility
- * (treats all payments as OUT)
- */
-export function calculateTotalPayments ( payments: Payment[] ): number
-{
-  return payments.reduce( ( sum, p ) => sum + p.amount, 0 )
-}
-
-/**
- * NEW helper – separates IN / OUT
- */
+/** Splits payments into money in and money out (a missing type counts as OUT). */
 export function calculatePaymentSummary ( payments: Payment[] )
 {
   let totalIn = 0
@@ -116,9 +133,7 @@ export function calculatePaymentSummary ( payments: Payment[] )
   return { totalIn, totalOut }
 }
 
-/**
- * CASH SALES (unchanged)
- */
+/** Cash sales = total - card/UPI - credit (per shop for the "Both" counter) */
 export function calculateCashSales (
   sales: SalesData,
   isFashionBoth: boolean
@@ -142,21 +157,7 @@ export function calculateCashSales (
   return sales.totalSales - sales.cardUpiSales - sales.creditSales
 }
 
-/**
- * OLD expected cash formula (kept for compatibility)
- */
-export function calculateExpectedCash (
-  openingCash: number,
-  cashSales: number,
-  totalPayments: number
-): number
-{
-  return openingCash + cashSales - totalPayments
-}
-
-/**
- * NEW correct expected cash formula (IN / OUT aware)
- */
+/** Expected cash = opening + cash sales + money in - money out */
 export function calculateExpectedCashWithInOut (
   openingCash: number,
   cashSales: number,
@@ -187,6 +188,3 @@ export function calculateClosingCash (
     ( denominations.coins1 || 0 ) * 1
   )
 }
-
-export const calculateDenominationTotal = calculateClosingCash
-

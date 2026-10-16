@@ -5,7 +5,7 @@ import type { ObjectId } from "mongodb"
 /**
  * ✅ EXTENDED ROLES (BACKWARD COMPATIBLE)
  */
-export type UserRole = "admin" | "supervisor" | "counter"
+export type UserRole = "admin" | "supervisor" | "counter" | "purchase"
 
 export interface User {
   _id: ObjectId
@@ -31,6 +31,10 @@ export async function verifyPassword(
 
 /* ---------------- AUTHENTICATION ---------------- */
 
+// a real-looking hash, compared against when the username does not exist so
+// that a wrong username and a wrong password take the same time to reject
+const DUMMY_HASH = bcrypt.hashSync("not-a-real-password", 10)
+
 export async function authenticateUser(
   username: string,
   password: string
@@ -38,7 +42,10 @@ export async function authenticateUser(
   const db = await getDatabase()
   const user = await db.collection<User>("users").findOne({ username })
 
-  if (!user) return null
+  if (!user) {
+    await verifyPassword(password, DUMMY_HASH)
+    return null
+  }
 
   const isValid = await verifyPassword(password, user.password)
   if (!isValid) return null
@@ -70,6 +77,24 @@ export async function initializeUsers() {
       username: "supervisor",
       password: supervisorPassword,
       role: "supervisor",
+      createdAt: new Date(),
+    } as any)
+  }
+
+  /* ---------- ENSURE PURCHASE USER EXISTS (SAFE) ---------- */
+  // Created with a random password nobody knows: the admin sets a real one
+  // from the Passwords page before anyone logs in.
+  const purchaseExists = await usersCollection.findOne({ username: "purchase" })
+
+  if (!purchaseExists) {
+    const purchasePassword = await hashPassword(
+      crypto.randomUUID() + crypto.randomUUID()
+    )
+
+    await usersCollection.insertOne({
+      username: "purchase",
+      password: purchasePassword,
+      role: "purchase",
       createdAt: new Date(),
     } as any)
   }

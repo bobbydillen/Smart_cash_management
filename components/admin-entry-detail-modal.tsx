@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import type { DayEntry, DenominationCount } from "@/lib/types"
+import type { DayEntry } from "@/lib/types"
 import
 {
   calculateCashSales,
@@ -11,49 +11,30 @@ import
   calculatePaymentSummary,
   calculateExpectedCashWithInOut,
 } from "@/lib/types"
-import { X } from "lucide-react"
-import { updateEntryOpeningCash } from "@/app/actions/admin"
+import {
+  X,
+  Check,
+  CheckCheck,
+  Clock,
+  Pencil,
+  Undo2,
+  ShieldAlert,
+  ShieldCheck,
+  ArrowUpRight,
+  ArrowDownLeft,
+  ArrowRightLeft,
+} from "lucide-react"
+import SectionHeader from "./section-header"
+import { DENOMS, emptyDenoms, subtractDenoms } from "@/lib/next-day"
+import { inr as fmt } from "@/lib/report"
+import StatusChip from "./status-chip"
+import {
+  getOpeningOriginal,
+  revertOpeningOverride,
+  updateEntryOpeningCash,
+} from "@/app/actions/admin"
 
 /* ================= CONSTANTS ================= */
-
-const EMPTY_DENOMS: DenominationCount = {
-  notes500: 0,
-  notes200: 0,
-  notes100: 0,
-  notes50: 0,
-  notes20: 0,
-  notes10: 0,
-  coins10: 0,
-  coins5: 0,
-  coins2: 0,
-  coins1: 0,
-}
-
-const DENOMS: Array<[ string, keyof DenominationCount, number ]> = [
-  [ "₹500", "notes500", 500 ],
-  [ "₹200", "notes200", 200 ],
-  [ "₹100", "notes100", 100 ],
-  [ "₹50", "notes50", 50 ],
-  [ "₹20", "notes20", 20 ],
-  [ "₹10", "notes10", 10 ],
-  [ "₹10", "coins10", 10 ],
-  [ "₹5", "coins5", 5 ],
-  [ "₹2", "coins2", 2 ],
-  [ "₹1", "coins1", 1 ],
-]
-
-const subtractDenoms = (
-  closing: DenominationCount,
-  nextDay: DenominationCount
-): DenominationCount =>
-{
-  const r = { ...EMPTY_DENOMS }
-    ; ( Object.keys( r ) as ( keyof DenominationCount )[] ).forEach( k =>
-    {
-      r[ k ] = Math.max( 0, closing[ k ] - ( nextDay[ k ] || 0 ) )
-    } )
-  return r
-}
 
 /* ================= PROPS ================= */
 
@@ -62,6 +43,10 @@ interface Props
   entry: DayEntry
   onClose: () => void
   onUpdate: () => void
+  /** confirms this entry (same action as the Counter Status card) */
+  onConfirm: () => Promise<void>
+  /** supervisors can look but not confirm or override */
+  readOnly?: boolean
 }
 
 /* ================= COMPONENT ================= */
@@ -70,9 +55,39 @@ export default function AdminEntryDetailModal ( {
   entry,
   onClose,
   onUpdate,
+  onConfirm,
+  readOnly = false,
 }: Props )
 {
   const [ openingCash, setOpeningCash ] = useState( entry.openingCash || 0 )
+  const [ originalCash, setOriginalCash ] = useState<number | null>( null )
+  const [ busy, setBusy ] = useState( false )
+  const [ showOverride, setShowOverride ] = useState( false )
+
+  // follow the saved value after an update, revert or refresh
+  useEffect( () =>
+  {
+    setOpeningCash( entry.openingCash || 0 )
+  }, [ entry.openingCash ] )
+
+  // what the opening cash would be without an override
+  useEffect( () =>
+  {
+    if ( readOnly ) return
+    let stale = false
+    getOpeningOriginal( entry._id! ).then( res =>
+    {
+      if ( !stale && "cash" in res ) setOriginalCash( res.cash ?? null )
+    } )
+    return () =>
+    {
+      stale = true
+    }
+  }, [ entry._id, entry.openingCash ] )
+
+  const isOverridden =
+    !!entry.openingOverride ||
+    ( originalCash !== null && Math.abs( originalCash - ( entry.openingCash || 0 ) ) > 0.005 )
 
   /* ================= CALCULATIONS ================= */
 
@@ -122,15 +137,19 @@ export default function AdminEntryDetailModal ( {
   const shortage = expectedCash - actualCash
 
   const nextDayTotal = calculateClosingCash(
-    entry.nextDayOpeningDenominations || EMPTY_DENOMS
+    entry.nextDayOpeningDenominations || emptyDenoms()
   )
 
   const availableDenoms = subtractDenoms(
     entry.closingDenominations,
-    entry.nextDayOpeningDenominations || EMPTY_DENOMS
+    entry.nextDayOpeningDenominations || emptyDenoms()
   )
 
   const availableCash = calculateClosingCash( availableDenoms )
+
+  const handoverOk =
+    !!entry.availableCashHandedOver &&
+    Math.abs( ( entry.availableCashHandedOverAmount ?? -1 ) - availableCash ) < 0.005
 
   /* ================= ACTION ================= */
 
@@ -138,138 +157,268 @@ export default function AdminEntryDetailModal ( {
   {
     await updateEntryOpeningCash( entry._id!, openingCash )
     onUpdate()
+    setShowOverride( false )
+  }
+
+  const handleRevert = async () =>
+  {
+    if (
+      !confirm(
+        `Remove the override and restore the opening cash to ₹${ ( originalCash ?? 0 ).toFixed( 2 ) }?`
+      )
+    )
+      return
+    setBusy( true )
+    const res = await revertOpeningOverride( entry._id! )
+    setBusy( false )
+    if ( res.error ) return alert( res.error )
+    onUpdate()
   }
 
   /* ================= JSX ================= */
 
+  const flagged = entry.openingVerifyStatus === "not_verified"
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-      <div className="bg-background w-full max-w-5xl rounded-lg max-h-[90vh] overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={ e => e.target === e.currentTarget && onClose() }
+    >
+      <div className="max-h-[94vh] w-full overflow-y-auto rounded-t-3xl bg-background shadow-2xl sm:max-w-3xl sm:rounded-2xl">
 
         {/* HEADER */ }
-        <div className="sticky top-0 bg-background border-b p-4 flex justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">{ entry.counterName }</h2>
-            <p className="text-sm text-muted-foreground">{ entry.date }</p>
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b bg-card/95 px-5 py-4 backdrop-blur">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="truncate text-lg font-semibold leading-tight">{ entry.counterName }</h2>
+              { entry.status === "open" && <StatusChip tone="info">Open</StatusChip> }
+              { entry.status === "submitted" && <StatusChip tone="warning">Submitted</StatusChip> }
+              { entry.status === "confirmed" && <StatusChip tone="success">Confirmed</StatusChip> }
+            </div>
+            <p className="text-sm text-muted-foreground">
+              { new Date( entry.date + "T00:00:00" ).toLocaleDateString( "en-IN", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              } ) }
+            </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={ onClose }>
-            <X className="w-5 h-5" />
+          <Button variant="ghost" size="icon" onClick={ onClose } aria-label="Close">
+            <X />
           </Button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="space-y-4 p-4 sm:p-5">
 
-          {/* DAY SUMMARY */ }
-          <Card className="p-6 space-y-3">
-            <h3 className="text-xl font-bold">Day Summary</h3>
+          {/* ================= DAY SUMMARY ================= */ }
+          <Card className="space-y-5 p-5">
+            <SectionHeader title="Day summary" subtitle="Figures entered by the counter" />
 
-            <Row label="Opening Cash" value={ openingCash } />
-            <Row label="Total Sales" value={ totalSalesForAdmin } bold />
-
-            { isFashionBoth ? (
-              <>
-                <Divider />
-                <div className="font-semibold">Smart Mart</div>
-                <Row label="Cash Sales" value={ martCashSales } />
-                <Row label="Card / UPI Sales" value={ martCardSales } />
-                <Row label="Credit Sales" value={ martCreditSales } />
-
-                <Divider />
-                <div className="font-semibold">Smart Fashion</div>
-                <Row label="Cash Sales" value={ fashionCashSales } />
-                <Row label="Card / UPI Sales" value={ fashionCardSales } />
-                <Row label="Credit Sales" value={ fashionCreditSales } />
-
-                <Divider />
-                <Row label="TOTAL CASH SALES" value={ totalCashSales } bold />
-                <Row label="TOTAL CARD SALES" value={ totalCardSales } bold />
-                <Row label="TOTAL CREDIT SALES" value={ totalCreditSales } bold />
-              </>
-            ) : (
-              <>
-                <Row label="Cash Sales" value={ cashSales } />
-                <Row label="Card / UPI Sales" value={ totalCardSales } />
-                <Row label="Credit Sales" value={ totalCreditSales } />
-              </>
-            ) }
-
-            <Divider />
-
-            <Row label="Payments IN" value={ totalIn } />
-            <Row label="Payments OUT" value={ totalOut } />
-
-            <Divider />
-
-            <Row label="Expected Cash" value={ expectedCash } bold />
-            <Row label="Actual Cash" value={ actualCash } bold />
-
-            <div className={ `flex justify-between font-bold ${ shortage > 0
-              ? "text-red-600"
-              : shortage < 0
-                ? "text-green-600"
-                : ""
-              }` }>
-              <span>
-                { shortage > 0 ? "SHORTAGE" : shortage < 0 ? "EXCESS" : "BALANCED" }
-              </span>
-              <span>₹{ Math.abs( shortage ).toFixed( 2 ) }</span>
+            {/* opening */ }
+            <div className="space-y-2">
+              <Row label="Opening cash" value={ openingCash } bold />
+              { entry.openingVerified && (
+                <div
+                  className={ `rounded-lg px-3 py-2 text-sm ${ flagged
+                    ? "bg-warning-soft text-warning"
+                    : "bg-success-soft text-success"
+                    }` }
+                >
+                  <div className="flex items-center gap-1.5 font-medium">
+                    { flagged ? <ShieldAlert className="size-4" /> : <ShieldCheck className="size-4" /> }
+                    { flagged ? "Opening could not be verified" : "Opening verified" }
+                    { entry.openingVerifiedBy && <span className="font-normal">· { entry.openingVerifiedBy }</span> }
+                  </div>
+                  { entry.openingNote && <div className="mt-0.5">Reason: { entry.openingNote }</div> }
+                  { ( entry.openingHistory?.length ?? 0 ) > 0 && (
+                    <div className="mt-1 text-xs opacity-80">
+                      Edited { entry.openingHistory!.length }× — earlier:{ " " }
+                      { entry.openingHistory!
+                        .map( h =>
+                          `${ h.status === "not_verified" ? "not verified" : "verified" }${ h.by ? " by " + h.by : "" }${ h.note ? " (" + h.note + ")" : "" }`
+                        )
+                        .join( "; " ) }
+                    </div>
+                  ) }
+                </div>
+              ) }
             </div>
 
-            <Divider />
+            {/* sales */ }
+            <Block title="Sales">
+              <Row label="Total sales" value={ totalSalesForAdmin } bold />
+              { isFashionBoth ? (
+                <>
+                  <SubBlock title="Smart Mart">
+                    <Row label="Cash" value={ martCashSales } />
+                    <Row label="Card / UPI" value={ martCardSales } />
+                    <Row label="Credit" value={ martCreditSales } />
+                  </SubBlock>
+                  <SubBlock title="Smart Fashion">
+                    <Row label="Cash" value={ fashionCashSales } />
+                    <Row label="Card / UPI" value={ fashionCardSales } />
+                    <Row label="Credit" value={ fashionCreditSales } />
+                  </SubBlock>
+                  <div className="space-y-2 border-t pt-2">
+                    <Row label="Total cash sales" value={ totalCashSales } bold />
+                    <Row label="Total card / UPI" value={ totalCardSales } bold />
+                    <Row label="Total credit" value={ totalCreditSales } bold />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Row label="Cash" value={ cashSales } />
+                  <Row label="Card / UPI" value={ totalCardSales } />
+                  <Row label="Credit" value={ totalCreditSales } />
+                </>
+              ) }
+            </Block>
 
-            <Row label="Next Day Opening" value={ nextDayTotal } />
-            <Row label="Total Available Cash" value={ availableCash } bold />
+            {/* payments */ }
+            <Block title="Payments">
+              <Row label="Money in" value={ totalIn } tone="success" sign="+" />
+              <Row label="Money out" value={ totalOut } tone="danger" sign="−" />
+            </Block>
 
-            <div className="font-semibold pt-2">Available Cash Denominations</div>
+            {/* reconciliation */ }
+            <Block title="Reconciliation">
+              <Row label="Expected cash" value={ expectedCash } bold />
+              <Row label="Counted cash" value={ actualCash } bold />
+              <div
+                className={ `flex items-center justify-between rounded-xl px-4 py-3 ${ Math.abs( shortage ) < 0.005
+                  ? "bg-success-soft text-success"
+                  : shortage > 0
+                    ? "bg-danger-soft text-danger"
+                    : "bg-info-soft text-info"
+                  }` }
+              >
+                <span className="text-sm font-semibold">
+                  { Math.abs( shortage ) < 0.005 ? "Balanced" : shortage > 0 ? "Shortage" : "Excess" }
+                </span>
+                <span className="text-lg font-semibold">₹{ fmt( Math.abs( shortage ) ) }</span>
+              </div>
+            </Block>
 
-            { DENOMS.map( ( [ label, key, value ] ) =>
-              availableDenoms[ key ] > 0 ? (
-                <div key={ key } className="flex justify-between text-sm">
-                  <span>{ label } × { availableDenoms[ key ] }</span>
-                  <span>₹{ ( availableDenoms[ key ] * value ).toFixed( 2 ) }</span>
+            {/* next day + available */ }
+            <Block title="Next day & available cash">
+              <Row label="Next-day opening" value={ nextDayTotal } />
+              <Row label="Available cash" value={ availableCash } bold />
+
+              { DENOMS.some( ( [ , key ] ) => availableDenoms[ key ] > 0 ) && (
+                <div className="space-y-1 rounded-xl bg-secondary/60 p-3">
+                  { DENOMS.map( ( [ label, key, value ] ) =>
+                  {
+                    if ( availableDenoms[ key ] <= 0 ) return null
+                    const checked = ( entry.availableCheckedDenoms || [] ).includes(
+                      `${ key }:${ availableDenoms[ key ] }`
+                    )
+                    return (
+                      <div key={ key } className="flex items-center justify-between text-sm">
+                        <span className="flex items-center gap-2">
+                          <span
+                            className={ `grid size-4 place-items-center rounded-full ${ checked ? "bg-success text-white" : "border border-muted-foreground/40"
+                              }` }
+                          >
+                            { checked && <Check className="size-3" /> }
+                          </span>
+                          { label } × { availableDenoms[ key ] }
+                        </span>
+                        <span className="font-medium">₹{ fmt( availableDenoms[ key ] * value ) }</span>
+                      </div>
+                    )
+                  } ) }
                 </div>
-              ) : null
-            ) }
+              ) }
+
+              <div
+                className={ `flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${ handoverOk ? "bg-success-soft text-success" : "bg-muted text-muted-foreground"
+                  }` }
+              >
+                { handoverOk ? <Check className="size-4" /> : <Clock className="size-4" /> }
+                { handoverOk
+                  ? `Available cash checked by counter${ entry.availableCashHandedOverAt
+                    ? " at " + new Date( entry.availableCashHandedOverAt ).toLocaleTimeString( "en-IN", { hour: "2-digit", minute: "2-digit" } )
+                    : "" }`
+                  : "Available cash not checked" }
+              </div>
+            </Block>
+
+            {/* status / confirm */ }
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+              <div>
+                <div className="text-xs text-muted-foreground">Status</div>
+                <div
+                  className={ `font-semibold ${ entry.status === "confirmed"
+                    ? "text-success"
+                    : entry.status === "submitted"
+                      ? "text-warning"
+                      : "text-info"
+                    }` }
+                >
+                  { entry.status === "confirmed"
+                    ? "Confirmed"
+                    : entry.status === "submitted"
+                      ? "Submitted — awaiting your confirmation"
+                      : "Open — not submitted yet" }
+                </div>
+                { entry.status === "confirmed" && entry.confirmedBy && (
+                  <div className="text-xs text-muted-foreground">by { entry.confirmedBy }</div>
+                ) }
+              </div>
+
+              { !readOnly && entry.status === "submitted" && (
+                <Button size="lg" onClick={ onConfirm }>
+                  <CheckCheck /> Confirm
+                </Button>
+              ) }
+            </div>
           </Card>
 
-          {/* PAYMENTS – SEPARATE CARD */ }
-          <Card className="p-6 space-y-4">
-            <h3 className="text-lg font-bold">Payments (IN / OUT)</h3>
+          {/* ================= PAYMENTS ================= */ }
+          <Card className="space-y-4 p-5">
+            <SectionHeader title="Payment entries" subtitle="Cash in and out during the day" />
 
-            <div className="rounded border bg-muted/40 p-3">
-              <div className="text-xs text-muted-foreground">
-                Payment Entry Number
-              </div>
-              <div className="font-mono font-semibold">
-                { entry.paymentRefNumber || "-" }
-              </div>
+            <div className="flex items-center justify-between rounded-lg bg-secondary/60 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">Payment entry number</span>
+              <span className="font-mono font-semibold">{ entry.paymentRefNumber || "—" }</span>
             </div>
 
             { entry.payments.length === 0 ? (
-              <div className="text-sm text-muted-foreground">
+              <div className="rounded-xl border border-dashed py-6 text-center text-sm text-muted-foreground">
                 No payment entries recorded.
               </div>
             ) : (
               <div className="space-y-2">
                 { entry.payments.map( ( p, i ) =>
                 {
-                  const type = p.type ?? "OUT"
+                  const isOut = ( p.type ?? "OUT" ) === "OUT"
                   return (
-                    <div
-                      key={ i }
-                      className={ `flex justify-between items-start p-3 rounded ${ type === "IN" ? "bg-green-50" : "bg-red-50"
-                        }` }
-                    >
-                      <div>
-                        <div className="font-medium">
-                          { type === "IN" ? "➕ IN" : "➖ OUT" } — { p.description }
-                        </div>
+                    <div key={ i } className="flex items-center gap-3 rounded-xl border bg-card p-3">
+                      <div
+                        className={ `grid size-9 shrink-0 place-items-center rounded-full ${ p.transferId
+                          ? "bg-info-soft text-info"
+                          : isOut
+                            ? "bg-danger-soft text-danger"
+                            : "bg-success-soft text-success"
+                          }` }
+                      >
+                        { p.transferId ? (
+                          <ArrowRightLeft className="size-4" />
+                        ) : isOut ? (
+                          <ArrowUpRight className="size-4" />
+                        ) : (
+                          <ArrowDownLeft className="size-4" />
+                        ) }
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium">{ p.description }</div>
                         <div className="text-xs text-muted-foreground">
-                          { new Date( p.time ).toLocaleTimeString( "en-IN" ) }
+                          { new Date( p.time ).toLocaleTimeString( "en-IN", { hour: "2-digit", minute: "2-digit" } ) }
                         </div>
                       </div>
-                      <div className="font-bold">
-                        ₹{ p.amount.toFixed( 2 ) }
+                      <div className={ `text-sm font-semibold ${ isOut ? "text-danger" : "text-success" }` }>
+                        { isOut ? "−" : "+" }₹{ fmt( p.amount ) }
                       </div>
                     </div>
                   )
@@ -277,38 +426,71 @@ export default function AdminEntryDetailModal ( {
               </div>
             ) }
 
-            <div className="grid grid-cols-2 gap-4 pt-3 border-t">
-              <div className="text-green-700 font-semibold">
-                Payments IN<br />₹{ totalIn.toFixed( 2 ) }
-              </div>
-              <div className="text-red-700 font-semibold text-right">
-                Payments OUT<br />₹{ totalOut.toFixed( 2 ) }
-              </div>
-            </div>
-
-            <Divider />
-
-            <div className="flex justify-between font-semibold">
-              <span>Closed By</span>
-              <span>{ entry.closedBy || "-" }</span>
+            <div className="flex items-center justify-between border-t pt-3 text-sm">
+              <span className="text-muted-foreground">Closed by</span>
+              <span className="font-medium">{ entry.closedBy || "—" }</span>
             </div>
           </Card>
 
-          {/* OVERRIDE OPENING CASH */ }
-          <Card className="p-6">
-            <h3 className="text-lg font-bold mb-2">Override Opening Cash</h3>
-            <div className="flex gap-3">
-              <input
-                type="number"
-                className="border rounded px-3 py-1 w-full"
-                value={ openingCash }
-                onChange={ e =>
-                  setOpeningCash( Number( e.target.value ) || 0 )
-                }
-              />
-              <Button onClick={ handleOverrideOpening }>Update</Button>
+          {/* ================= OVERRIDE OPENING CASH ================= */ }
+          { !readOnly && (
+          <Card className="p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">Opening cash override</div>
+                { isOverridden && !showOverride ? (
+                  <div className="text-xs text-warning">
+                    Overridden — original ₹{ fmt( originalCash ?? 0 ) }
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">Correct the opening amount if it was wrong</div>
+                ) }
+              </div>
+              <Button
+                variant={ showOverride ? "default" : "outline"}
+                onClick={ () =>
+                {
+                  setOpeningCash( entry.openingCash || 0 )
+                  setShowOverride( v => !v )
+                } }
+              >
+                <Pencil /> Override
+              </Button>
             </div>
+
+            { showOverride && (
+              <div className="mt-4 space-y-3">
+                { isOverridden && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-warning-soft p-3 text-sm text-warning">
+                    <div>
+                      <div className="font-semibold">Opening cash has been overridden</div>
+                      <div>
+                        Original (from previous day): <strong>₹{ fmt( originalCash ?? 0 ) }</strong>
+                        { entry.openingOverride?.by && ` · by ${ entry.openingOverride.by }` }
+                      </div>
+                    </div>
+                    <Button variant="outline" size="sm" disabled={ busy } onClick={ handleRevert }>
+                      <Undo2 /> { busy ? "Reverting…" : "Revert override" }
+                    </Button>
+                  </div>
+                ) }
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₹</span>
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      className="h-10 w-full rounded-lg border bg-card pl-7 pr-3 text-base outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm"
+                      value={ openingCash }
+                      onChange={ e => setOpeningCash( Number( e.target.value ) || 0 ) }
+                    />
+                  </div>
+                  <Button onClick={ handleOverrideOpening }>Update</Button>
+                </div>
+              </div>
+            ) }
           </Card>
+          ) }
 
         </div>
       </div>
@@ -322,21 +504,45 @@ function Row ( {
   label,
   value,
   bold = false,
+  tone,
+  sign,
 }: {
   label: string
   value: number
   bold?: boolean
+  tone?: "success" | "danger"
+  sign?: string
 } )
 {
   return (
-    <div className={ `flex justify-between ${ bold ? "font-bold" : "" }` }>
-      <span>{ label }</span>
-      <span>₹{ value.toFixed( 2 ) }</span>
+    <div className="flex items-center justify-between text-sm">
+      <span className={ bold ? "font-medium" : "text-muted-foreground" }>{ label }</span>
+      <span
+        className={ `${ bold ? "font-semibold" : "font-medium" } ${ tone === "success" ? "text-success" : tone === "danger" ? "text-danger" : ""
+          }` }
+      >
+        { sign }₹{ value.toLocaleString( "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 } ) }
+      </span>
     </div>
   )
 }
 
-function Divider ()
+function Block ( { title, children }: { title: string; children: React.ReactNode } )
 {
-  return <div className="border-t my-2" />
+  return (
+    <div className="space-y-2.5">
+      <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{ title }</div>
+      { children }
+    </div>
+  )
+}
+
+function SubBlock ( { title, children }: { title: string; children: React.ReactNode } )
+{
+  return (
+    <div className="space-y-2 rounded-xl bg-secondary/50 p-3">
+      <div className="text-sm font-semibold">{ title }</div>
+      { children }
+    </div>
+  )
 }

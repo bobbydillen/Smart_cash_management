@@ -1,16 +1,18 @@
-import SupervisorDashboard from "@/components/supervisor-dashboard"
-import { getAllEntries } from "@/app/actions/admin"
+import { getSerializedSession } from "@/lib/session"
+import { redirect } from "next/navigation"
+import { getAllEntries, getCounterNames } from "@/app/actions/admin"
+import AdminDashboard from "@/components/admin-dashboard"
 
 /**
- * Supervisor Page
- * - Server Component
- * - Read-only access
- * - Uses same data source as admin
+ * Supervisor page: the admin dashboard in read-only mode.
  */
 export default async function SupervisorPage() {
-  // Load today's entries by default
-  const today = new Date().toISOString().split("T")[0]
-  const initialEntries = await getAllEntries(today)
+  const user = await getSerializedSession()
 
-  return <SupervisorDashboard initialEntries={initialEntries} />
+  if (!user) redirect("/")
+  if (user.role !== "supervisor") redirect("/")
+
+  const [entries, counterNames] = await Promise.all([getAllEntries(), getCounterNames()])
+
+  return <AdminDashboard initialEntries={entries} counterNames={counterNames} variant="supervisor" />
 }
