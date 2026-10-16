@@ -32,7 +32,7 @@ if (dbName === "smartmart_cash") {
 const out = path.join(root, ".scratch-test")
 fs.rmSync(out, { recursive: true, force: true })
 fs.mkdirSync(out)
-for (const f of ["purchase-service", "purchase", "entries", "next-day", "types", "action-result", "validation", "report", "incharge-group"]) {
+for (const f of ["purchase-service", "purchase", "entries", "next-day", "types", "action-result", "validation", "report", "incharge-group", "text-format"]) {
   let js = ts.transpileModule(fs.readFileSync(path.join(root, "lib", f + ".ts"), "utf8"), {
     compilerOptions: { module: "ESNext", target: "ES2022" },
   }).outputText

@@ -29,6 +29,8 @@ export interface Vendor {
   _id: string
   name: string
   phone?: string
+  /** the person to ask for at the vendor */
+  contactPerson?: string
   address?: string
   gstin?: string
   /** what this vendor supplies */

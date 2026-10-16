@@ -16,7 +16,7 @@ const ts = require("typescript")
 const out = path.join(root, ".scratch-test")
 fs.rmSync(out, { recursive: true, force: true })
 fs.mkdirSync(out)
-const files = ["purchase-service", "purchase", "entries", "next-day", "types", "action-result", "validation", "report", "incharge-group"]
+const files = ["purchase-service", "purchase", "entries", "next-day", "types", "action-result", "validation", "report", "incharge-group", "text-format"]
 for (const f of files) {
   const source = fs.readFileSync(path.join(root, "lib", f + ".ts"), "utf8")
   let js = ts.transpileModule(source, { compilerOptions: { module: "ESNext", target: "ES2022" } }).outputText
@@ -70,6 +70,33 @@ try {
   t("bad opening balance refused", isErr(await S.createVendor(db, actor, { name: "X", openingBalance: -5 })))
   r = await S.createVendor(db, actor, { name: "Mega Foods" })
   const v2 = r.vendorId
+
+  // ===== names are saved with a capital at the start of every word
+  {
+    const { properCase } = await import(url(".scratch-test/text-format.mjs"))
+    t("proper case: lower", properCase("smart mart") === "Smart Mart")
+    t("proper case: all capitals", properCase("SRI LAKSHMI TRADERS") === "Sri Lakshmi Traders")
+    t("proper case: own capitals kept", properCase("SmartMart") === "SmartMart")
+    t("proper case: first letter forced up", properCase("smartMart") === "SmartMart")
+    t("proper case: items list", properCase("rice, OIL, packaged snacks") === "Rice, Oil, Packaged Snacks")
+    t("proper case: address", properCase("12/3, main road, near bus stand") === "12/3, Main Road, Near Bus Stand")
+    t("proper case: ordinals untouched", properCase("1st floor, 2nd cross") === "1st Floor, 2nd Cross")
+    t("proper case: initials stay capital", properCase("K S RAMAN") === "K S Raman")
+    t("proper case: apostrophe", properCase("men's wear") === "Men's Wear")
+    r = await S.createVendor(db, actor, { name: "  new  VENDOR traders ", items: "RICE and oil", address: "5th street, anna nagar", contactPerson: "ramesh KUMAR", gstin: "33abcde1234f1z5" })
+    const doc = await db.collection("vendors").findOne({ nameLower: "new vendor traders" })
+    t("vendor name is saved properly", doc?.name === "New Vendor Traders", doc?.name)
+    t("supplies are saved properly", doc?.items === "Rice And Oil", doc?.items)
+    t("address is saved properly", doc?.address === "5th Street, Anna Nagar", doc?.address)
+    t("contact person is saved properly", doc?.contactPerson === "Ramesh Kumar", doc?.contactPerson)
+    t("GST number is saved in capitals", doc?.gstin === "33ABCDE1234F1Z5", doc?.gstin)
+    t("a different spelling of the same name is a duplicate", isErr(await S.createVendor(db, actor, { name: "NEW VENDOR TRADERS" })))
+    t("spaces and punctuation do not make a new vendor", isErr(await S.createVendor(db, actor, { name: "new-vendor  traders." })))
+    t("joined-up spelling is the same vendor", isErr(await S.createVendor(db, actor, { name: "NewVendorTraders" })))
+    t("a genuinely different name is accepted", !isErr(await S.createVendor(db, actor, { name: "New Vendor Traders East" })))
+    await db.collection("vendors").deleteOne({ nameLower: "new vendor traders east" })
+    await db.collection("vendors").deleteOne({ nameLower: "new vendor traders" })
+  }
 
   // ===== bills
   r = await S.createBill(db, actor, { vendorId: v1, billNumber: "B-100", billDate: today, amount: 100000, items: "rice 50 bags" })

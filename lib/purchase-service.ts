@@ -7,6 +7,7 @@ import { fail, ok, type Failure } from "./action-result"
 import { isDateString, parseMoney, parseText } from "./validation"
 import { todayIST } from "./report"
 import { groupFilter } from "./incharge-group"
+import { nameKey, properCase } from "./text-format"
 import {
   billStatus,
   expectedPurchaseCash,
@@ -97,6 +98,7 @@ async function checkInCharge(db: Db, name: unknown): Promise<string | Failure> {
 export interface VendorInput {
   name?: unknown
   phone?: unknown
+  contactPerson?: unknown
   address?: unknown
   gstin?: unknown
   items?: unknown
@@ -104,11 +106,16 @@ export interface VendorInput {
   openingBalance?: unknown
 }
 
+const tidy = (v: string | undefined) => (v ? properCase(v) : undefined)
+
 function cleanVendor(input: VendorInput): Failure | { fields: Document } {
-  const name = parseText(input.name, 80)
-  if (!name) return fail("Enter the vendor's name")
+  const typedName = parseText(input.name, 80)
+  if (!typedName) return fail("Enter the vendor's name")
+  // names, items and addresses are saved with a capital at the start of every word
+  const name = properCase(typedName)
   for (const [v, max, label] of [
     [input.phone, 30, "Phone"],
+    [input.contactPerson, 80, "Contact person"],
     [input.address, 200, "Address"],
     [input.gstin, 20, "GST number"],
     [input.items, 300, "Items supplied"],
@@ -127,21 +134,30 @@ function cleanVendor(input: VendorInput): Failure | { fields: Document } {
       name,
       nameLower: name.toLowerCase(),
       phone: optionalText(input.phone, 30),
-      address: optionalText(input.address, 200),
-      gstin: optionalText(input.gstin, 20),
-      items: optionalText(input.items, 300),
+      contactPerson: tidy(optionalText(input.contactPerson, 80)),
+      address: tidy(optionalText(input.address, 200)),
+      gstin: optionalText(input.gstin, 20)?.toUpperCase(),
+      items: tidy(optionalText(input.items, 300)),
       notes: optionalText(input.notes, 500),
       openingBalance: opening,
     },
   }
 }
 
+/** The vendor that already has this name (ignoring capitals, spaces and punctuation), if any. */
+async function sameNameVendor(db: Db, name: string, exceptId?: ObjectId): Promise<string | null> {
+  const key = nameKey(name)
+  const all = await vendorsCol(db).find({}, { projection: { name: 1 } }).toArray()
+  const hit = all.find((v) => nameKey(v.name) === key && (!exceptId || !v._id.equals(exceptId)))
+  return hit ? (hit.name as string) : null
+}
+
 export async function createVendor(db: Db, actor: Actor, input: VendorInput) {
   const cleaned = cleanVendor(input)
   if ("error" in cleaned) return cleaned
 
-  if (await vendorsCol(db).findOne({ nameLower: cleaned.fields.nameLower }))
-    return fail("A vendor with this name already exists")
+  const dup = await sameNameVendor(db, cleaned.fields.name as string)
+  if (dup) return fail(`A vendor with this name already exists: ${dup}`)
 
   const res = await vendorsCol(db).insertOne({
     ...cleaned.fields,
@@ -158,8 +174,8 @@ export async function updateVendor(db: Db, id: string, input: VendorInput) {
   const cleaned = cleanVendor(input)
   if ("error" in cleaned) return cleaned
 
-  const clash = await vendorsCol(db).findOne({ nameLower: cleaned.fields.nameLower, _id: { $ne: _id } })
-  if (clash) return fail("A vendor with this name already exists")
+  const clash = await sameNameVendor(db, cleaned.fields.name as string, _id)
+  if (clash) return fail(`A vendor with this name already exists: ${clash}`)
 
   const res = await vendorsCol(db).updateOne({ _id }, { $set: { ...cleaned.fields, updatedAt: new Date() } })
   if (res.matchedCount === 0) return fail("Vendor not found")

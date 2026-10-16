@@ -33,7 +33,7 @@ export default function VendorsView({
     const q = search.trim().toLowerCase()
     return vendors
       .filter((v) => showInactive || v.active)
-      .filter((v) => !q || [v.name, v.items, v.phone].some((f) => (f ?? "").toLowerCase().includes(q)))
+      .filter((v) => !q || [v.name, v.items, v.phone, v.contactPerson].some((f) => (f ?? "").toLowerCase().includes(q)))
       // who we owe the most comes first
       .sort((a, b) => b.balance.totalToPay - a.balance.totalToPay || a.name.localeCompare(b.name))
   }, [vendors, search, showInactive])
@@ -49,7 +49,7 @@ export default function VendorsView({
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative min-w-52 flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search by name, item or phone" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <Input placeholder="Search by name, item, contact or phone" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
         {role === "purchase" && (
           <Button onClick={() => setAdding(true)}>

@@ -99,9 +99,10 @@ export default function VendorDetailView({
                   <Truck className="mt-0.5 size-4 shrink-0" /> <span>Supplies: {vendor.items}</span>
                 </div>
               )}
-              {vendor.phone && (
+              {(vendor.contactPerson || vendor.phone) && (
                 <div className="flex items-center gap-2">
-                  <Phone className="size-4 shrink-0" /> {vendor.phone}
+                  <Phone className="size-4 shrink-0" />
+                  {[vendor.contactPerson, vendor.phone].filter(Boolean).join(" · ")}
                 </div>
               )}
               {vendor.address && (

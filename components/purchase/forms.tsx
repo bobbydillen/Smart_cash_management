@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Modal from "@/components/modal"
@@ -11,12 +12,14 @@ import {
   editBill,
   editVendor,
   loadVendorDetail,
+  loadVendors,
   makePayment,
   settleVoucher,
 } from "@/app/actions/purchase"
 import type { BillWithStatus, PayMode, Vendor, Voucher } from "@/lib/purchase"
 import type { VendorDetail, VendorRow } from "@/lib/purchase-service"
 import { inr, todayIST } from "@/lib/report"
+import { nameKey, properCase } from "@/lib/text-format"
 
 const NEW_BILL = "__new"
 
@@ -36,6 +39,7 @@ export function VendorForm({
 }) {
   const [name, setName] = useState(vendor?.name ?? "")
   const [phone, setPhone] = useState(vendor?.phone ?? "")
+  const [contactPerson, setContactPerson] = useState(vendor?.contactPerson ?? "")
   const [items, setItems] = useState(vendor?.items ?? "")
   const [address, setAddress] = useState(vendor?.address ?? "")
   const [gstin, setGstin] = useState(vendor?.gstin ?? "")
@@ -43,11 +47,30 @@ export function VendorForm({
   const [notes, setNotes] = useState(vendor?.notes ?? "")
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
+  const router = useRouter()
+
+  // when adding, show vendors that already look like the name being typed
+  const [existing, setExisting] = useState<VendorRow[]>([])
+  useEffect(() => {
+    if (!vendor) loadVendors().then(setExisting)
+  }, [vendor])
+
+  const typedKey = nameKey(name)
+  const similar = useMemo(() => {
+    if (vendor || typedKey.length < 2) return []
+    return existing
+      .filter((v) => {
+        const k = nameKey(v.name)
+        return k.includes(typedKey) || (k.length >= 3 && typedKey.includes(k))
+      })
+      .slice(0, 5)
+  }, [existing, typedKey, vendor])
+  const sameName = similar.find((v) => nameKey(v.name) === typedKey)
 
   const save = async () => {
     setError("")
     setBusy(true)
-    const input = { name, phone, items, address, gstin, notes, openingBalance: opening }
+    const input = { name, phone, contactPerson, items, address, gstin, notes, openingBalance: opening }
     const res = vendor ? await editVendor(vendor._id, input) : await addVendor(input)
     setBusy(false)
     if (res.error) return setError(res.error)
@@ -58,21 +81,50 @@ export function VendorForm({
     <Modal title={vendor ? "Edit vendor" : "Add vendor"} onClose={onClose}>
       <div className="space-y-4">
         <Field label="Vendor name" required>
-          <Input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} autoFocus />
+          <Input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} onBlur={() => setName((v) => properCase(v))} autoFocus />
         </Field>
+        {similar.length > 0 && (
+          <div className={`rounded-xl border p-3 text-sm ${sameName ? "border-danger/40 bg-danger-soft" : "bg-warning-soft"}`}>
+            <div className={`mb-2 font-medium ${sameName ? "text-danger" : "text-warning"}`}>
+              {sameName ? "This vendor is already in your list" : "Already in your list. Is it one of these?"}
+            </div>
+            <div className="space-y-1.5">
+              {similar.map((v) => (
+                <button
+                  key={v._id}
+                  type="button"
+                  onClick={() => router.push(`/purchase/vendors/${v._id}`)}
+                  className="flex w-full items-center justify-between gap-3 rounded-lg bg-card px-3 py-2 text-left hover:bg-accent"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">
+                      {v.name}
+                      {!v.active && <span className="ml-2 text-xs font-normal text-muted-foreground">(inactive)</span>}
+                    </span>
+                    <span className="block truncate text-xs text-muted-foreground">{v.items || v.phone || "No details"}</span>
+                  </span>
+                  <span className="shrink-0 text-xs font-medium text-primary">Open</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <Field label="What they supply" hint="e.g. rice, oil, packaged snacks">
-          <textarea className={textarea} rows={2} maxLength={300} value={items} onChange={(e) => setItems(e.target.value)} />
+          <textarea className={textarea} rows={2} maxLength={300} value={items} onChange={(e) => setItems(e.target.value)} onBlur={() => setItems((v) => properCase(v))} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Contact person" hint="Optional">
+            <Input value={contactPerson} maxLength={80} onChange={(e) => setContactPerson(e.target.value)} onBlur={() => setContactPerson((v) => properCase(v))} />
+          </Field>
           <Field label="Phone">
             <Input value={phone} maxLength={30} inputMode="tel" onChange={(e) => setPhone(e.target.value)} />
           </Field>
-          <Field label="GST number">
-            <Input value={gstin} maxLength={20} onChange={(e) => setGstin(e.target.value)} />
-          </Field>
         </div>
+        <Field label="GST number">
+          <Input value={gstin} maxLength={20} onChange={(e) => setGstin(e.target.value.toUpperCase())} />
+        </Field>
         <Field label="Address">
-          <Input value={address} maxLength={200} onChange={(e) => setAddress(e.target.value)} />
+          <Input value={address} maxLength={200} onChange={(e) => setAddress(e.target.value)} onBlur={() => setAddress((v) => properCase(v))} />
         </Field>
         <Field label="Amount already owed" hint="What we already owed this vendor before using this system">
           <MoneyField value={opening} onChange={setOpening} />
@@ -81,7 +133,7 @@ export function VendorForm({
           <textarea className={textarea} rows={2} maxLength={500} value={notes} onChange={(e) => setNotes(e.target.value)} />
         </Field>
         <FormError message={error} />
-        <Button size="lg" className="w-full" onClick={save} disabled={busy || !name.trim()}>
+        <Button size="lg" className="w-full" onClick={save} disabled={busy || !name.trim() || !!sameName}>
           {busy ? "Saving…" : vendor ? "Save changes" : "Add vendor"}
         </Button>
       </div>
