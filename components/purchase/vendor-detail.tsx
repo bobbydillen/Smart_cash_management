@@ -52,7 +52,7 @@ export default function VendorDetailView({
 }) {
   const router = useRouter()
   const today = todayIST()
-  const canEdit = role === "purchase"
+  const canEdit = role === "purchase" || role === "admin"
   // the admin can also pay vendors, clear cheques and settle vouchers (from their own money)
   const canPay = role === "purchase" || role === "admin"
   const asAdmin = role === "admin"

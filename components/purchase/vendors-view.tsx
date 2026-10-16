@@ -51,7 +51,7 @@ export default function VendorsView({
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Search by name, item, contact or phone" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        {role === "purchase" && (
+        {(role === "purchase" || role === "admin") && (
           <Button onClick={() => setAdding(true)}>
             <Plus /> Add vendor
           </Button>

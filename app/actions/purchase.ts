@@ -37,6 +37,13 @@ async function asBankManager() {
   return { db: await getDatabase(), actor: { username: user.username } }
 }
 
+/** Keeping the vendor list and bills: the purchase counter and the admin (not the supervisor). */
+async function asVendorManager() {
+  const user = await getSession()
+  if (!user || (user.role !== "purchase" && user.role !== "admin")) return null
+  return { db: await getDatabase(), actor: { username: user.username } }
+}
+
 async function asViewer() {
   const user = await getSession()
   if (!user || (user.role !== "purchase" && user.role !== "admin" && user.role !== "supervisor")) return null
@@ -100,34 +107,34 @@ export async function toggleBank(id: string, active: boolean) {
 /* ================= VENDORS ================= */
 
 export async function addVendor(input: P.VendorInput) {
-  const c = await asPurchase()
+  const c = await asVendorManager()
   return c ? P.createVendor(c.db, c.actor, input) : DENIED
 }
 
 export async function editVendor(id: string, input: P.VendorInput) {
-  const c = await asPurchase()
+  const c = await asVendorManager()
   return c ? P.updateVendor(c.db, id, input) : DENIED
 }
 
 export async function toggleVendor(id: string, active: boolean) {
-  const c = await asPurchase()
+  const c = await asVendorManager()
   return c ? P.setVendorActive(c.db, id, active) : DENIED
 }
 
 /* ================= BILLS ================= */
 
 export async function addBill(input: P.BillInput) {
-  const c = await asPurchase()
+  const c = await asVendorManager()
   return c ? P.createBill(c.db, c.actor, input) : DENIED
 }
 
 export async function editBill(id: string, input: P.BillInput) {
-  const c = await asPurchase()
+  const c = await asVendorManager()
   return c ? P.updateBill(c.db, id, input) : DENIED
 }
 
 export async function removeBill(id: string) {
-  const c = await asPurchase()
+  const c = await asVendorManager()
   return c ? P.deleteBill(c.db, id) : DENIED
 }
 
