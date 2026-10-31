@@ -33,3 +33,6 @@ next-env.d.ts
 # python
 __pycache__/
 *.pyc
+
+# taste-skill working files
+/.taste-skill/
