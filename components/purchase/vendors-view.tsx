@@ -10,6 +10,7 @@ import StatusChip from "@/components/status-chip"
 import { ChevronRight, Plus, Search } from "lucide-react"
 import { VendorForm } from "./forms"
 import { inrWhole } from "@/lib/report"
+import { navStart } from "@/lib/nav-state"
 import type { VendorRow } from "@/lib/purchase-service"
 
 export default function VendorsView({
@@ -115,8 +116,10 @@ export default function VendorsView({
           onClose={() => setAdding(false)}
           onDone={(id) => {
             setAdding(false)
-            if (id) router.push(`/purchase/vendors/${id}`)
-            else router.refresh()
+            if (id) {
+              navStart()
+              router.push(`/purchase/vendors/${id}`)
+            } else router.refresh()
           }}
         />
       )}

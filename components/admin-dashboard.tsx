@@ -34,7 +34,7 @@ import TransferButton from "./transfer-button"
 import { AppShell } from "./app-shell"
 import { adminNav } from "./admin-nav"
 import DiffText from "./diff-text"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "@/hooks/use-navigate"
 import { ask, notify } from "@/components/confirm-host"
 
 /* ================= HELPERS ================= */
@@ -64,7 +64,7 @@ export default function AdminDashboard ( {
   variant = "admin",
 }: AdminDashboardProps )
 {
-  const router = useRouter()
+  const go = useNavigate()
   const [ entries, setEntries ] = useState<DayEntry[]>( initialEntries )
   const [ selectedDate, setSelectedDate ] = useState( todayIST() )
   const isAdmin = variant === "admin"
@@ -364,7 +364,7 @@ export default function AdminDashboard ( {
                   </div>
                 </div>
               </div>
-              <Button size="sm" variant="outline" onClick={ () => router.push( `/purchase?date=${ selectedDate }` ) }>
+              <Button size="sm" variant="outline" onClick={ () => go( `/purchase?date=${ selectedDate }` ) }>
                 <Eye /> Open
               </Button>
             </div>
@@ -390,7 +390,7 @@ export default function AdminDashboard ( {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" onClick={ () => router.push( `/purchase?date=${ selectedDate }` ) }>
+                <Button size="sm" variant="outline" onClick={ () => go( `/purchase?date=${ selectedDate }` ) }>
                   <Eye /> Open
                 </Button>
                 { isAdmin && purchase.day.status === "submitted" && (

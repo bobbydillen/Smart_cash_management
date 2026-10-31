@@ -47,6 +47,7 @@ import {
 import { COIN_KEYS, DENOMS, NOTE_KEYS, allocateLargestFirst, deriveKeep, emptyDenoms, subtractDenoms } from "@/lib/next-day"
 import { calculateClosingCash } from "@/lib/types"
 import { inr, shortDate } from "@/lib/report"
+import { navStart } from "@/lib/nav-state"
 import type { DayView, VendorRow } from "@/lib/purchase-service"
 import type { CashMove } from "@/lib/purchase"
 import { ask } from "@/components/confirm-host"
@@ -609,7 +610,10 @@ function DateBar({
   status?: string
 }) {
   const router = useRouter()
-  const go = (d: string) => router.push(d >= today ? "/purchase" : `/purchase?date=${d}`)
+  const go = (d: string) => {
+    navStart()
+    router.push(d >= today ? "/purchase" : `/purchase?date=${d}`)
+  }
   const shift = (days: number) => {
     const t = new Date(date + "T00:00:00Z")
     t.setUTCDate(t.getUTCDate() + days)

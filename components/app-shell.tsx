@@ -1,11 +1,12 @@
 "use client"
 
-import Link from "next/link"
+import Link, { useLinkStatus } from "next/link"
 import { useState, type ReactNode } from "react"
-import { LogOut, Lock, MoreHorizontal } from "lucide-react"
+import { Loader2, LogOut, Lock, MoreHorizontal } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import Modal from "@/components/modal"
 import ThemeToggle from "@/components/theme-toggle"
+import { useNavigating } from "@/lib/nav-state"
 
 /**
  * The frame every signed-in screen sits in (direction "Framed sheet"):
@@ -24,6 +25,20 @@ export interface NavItem {
   disabled?: boolean
   /** shown next to a disabled item to say why it is locked */
   hint?: string
+}
+
+/** The inside of a link. useLinkStatus only works inside a Link, so it lives here. */
+function LinkBody({ item, variant }: { item: NavItem; variant: "side" | "tab" | "sheet" }) {
+  const { pending } = useLinkStatus()
+  const Icon = item.icon
+  const size = variant === "tab" ? "size-5" : "size-4"
+  return (
+    <>
+      {pending ? <Loader2 className={`${size} animate-spin`} aria-hidden /> : <Icon className={size} aria-hidden />}
+      <span className={variant === "tab" ? "max-w-full truncate" : "flex-1 truncate text-left"}>{item.label}</span>
+      {pending && <span className="sr-only">Loading…</span>}
+    </>
+  )
 }
 
 function NavEntry({ item, variant, onNavigate }: { item: NavItem; variant: "side" | "tab" | "sheet"; onNavigate?: () => void }) {
@@ -54,7 +69,7 @@ function NavEntry({ item, variant, onNavigate }: { item: NavItem; variant: "side
   if (item.href && !item.disabled)
     return (
       <Link href={item.href} onClick={onNavigate} {...common}>
-        {content}
+        <LinkBody item={item} variant={variant} />
       </Link>
     )
   return (
@@ -105,6 +120,7 @@ export function AppShell({
   width?: string
 }) {
   const [more, setMore] = useState(false)
+  const navigating = useNavigating()
   const needMore = true
   const tabs = nav.length > 4 ? nav.slice(0, 3) : nav
   const overflow = [...(nav.length > 4 ? nav.slice(3) : []), ...secondary]
@@ -169,7 +185,7 @@ export function AppShell({
             {headerRight}
           </header>
           {toolbar && <section aria-label="Date and actions" className="border-b px-4 py-2 md:px-6 print:hidden">{toolbar}</section>}
-          <main id="main" tabIndex={-1} className={`mx-auto w-full flex-1 px-4 py-5 outline-none md:px-6 ${width} ${hasBottomBar ? "pb-40 md:pb-28" : "pb-28 md:pb-8"}`}>
+          <main id="main" tabIndex={-1} aria-busy={navigating} className={`mx-auto w-full flex-1 px-4 py-5 outline-none transition-opacity duration-200 md:px-6 ${navigating ? "opacity-60" : ""} ${width} ${hasBottomBar ? "pb-40 md:pb-28" : "pb-28 md:pb-8"}`}>
             {children}
           </main>
         </div>

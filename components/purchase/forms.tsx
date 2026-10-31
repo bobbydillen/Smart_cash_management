@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useNavigate } from "@/hooks/use-navigate"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import Modal from "@/components/modal"
@@ -48,7 +48,7 @@ export function VendorForm({
   const [notes, setNotes] = useState(vendor?.notes ?? "")
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
-  const router = useRouter()
+  const go = useNavigate()
 
   // when adding, show vendors that already look like the name being typed
   const [existing, setExisting] = useState<VendorRow[]>([])
@@ -94,7 +94,7 @@ export function VendorForm({
                 <button
                   key={v._id}
                   type="button"
-                  onClick={() => router.push(`/purchase/vendors/${v._id}`)}
+                  onClick={() => go(`/purchase/vendors/${v._id}`)}
                   className="flex w-full items-center justify-between gap-3 rounded-lg bg-card px-3 py-2 text-left hover:bg-accent"
                 >
                   <span className="min-w-0">
