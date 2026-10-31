@@ -10,18 +10,13 @@ import type { DayEntry } from "@/lib/types"
 import
   {
     calculateCashSales,
+    calculateExpectedCashWithInOut,
     calculatePaymentSummary,
     calculateClosingCash,
   } from "@/lib/types"
 import {
-  LogOut,
   Unlock,
-  KeyRound,
-  Users,
-  BarChart3,
   PackageSearch,
-  Landmark,
-  FileSearch,
   CheckCheck,
   Eye,
   ShieldCheck,
@@ -36,6 +31,9 @@ import type { DayView } from "@/lib/purchase-service"
 import AdminEntryDetailModal from "./admin-entry-detail-modal"
 import AdminTransfersPanel from "./admin-transfers-panel"
 import TransferButton from "./transfer-button"
+import { AppShell } from "./app-shell"
+import { adminNav } from "./admin-nav"
+import DiffText from "./diff-text"
 import { useRouter } from "next/navigation"
 
 /* ================= HELPERS ================= */
@@ -255,85 +253,42 @@ export default function AdminDashboard ( {
     year: "numeric",
   } )
 
+  const { nav, secondary } = adminNav( "overview", isAdmin )
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* ================= HEADER ================= */ }
-      <header className="sticky top-0 z-20 border-b bg-card/90 backdrop-blur">
-        <div className="mx-auto w-full max-w-6xl px-4">
-          <div className="flex items-center justify-between gap-3 py-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
-                <ShieldCheck className="size-5" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="truncate text-base font-semibold leading-tight">{ isAdmin ? "Admin dashboard" : "Supervisor dashboard" }</h1>
-                <p className="truncate text-xs text-muted-foreground">Smart Mart &amp; Smart Fashions</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Input
-                type="date"
-                value={ selectedDate }
-                onChange={ e => handleDateChange( e.target.value ) }
-                className="h-9 w-auto text-sm"
-                aria-label="Select date"
-              />
-              <Button variant="ghost" size="icon" onClick={ () => logout() } aria-label="Log out" title="Log out">
-                <LogOut />
-              </Button>
-            </div>
-          </div>
-
-          <nav className="-mx-1 flex gap-1.5 overflow-x-auto px-1 pb-3">
-            <Button variant="outline" size="sm" onClick={ () => router.push( "/admin/counter-comparison" ) }>
-              <BarChart3 /> Reports
-            </Button>
-            <Button variant="outline" size="sm" onClick={ () => router.push( "/purchase" ) }>
-              <PackageSearch /> Purchase
-            </Button>
-            { isAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={ () => router.push( "/admin/reconciliation" ) }
-              >
-                <FileSearch /> Reconciliation
-              </Button>
-            ) }
-            { isAdmin && (
-              <TransferButton
-                refreshEntry={ async () => {} }
-                onClosed={ () => setTransferTick( n => n + 1 ) }
-              />
-            ) }
-            { isAdmin && (
-              <Button variant="outline" size="sm" onClick={ () => router.push( "/purchase/cheques" ) }>
-                <Landmark /> Cheques &amp; banks
-              </Button>
-            ) }
-            { isAdmin && (
-              <>
-                <Button variant="outline" size="sm" onClick={ () => router.push( "/admin/incharges" ) }>
-                  <Users /> In-charges
-                </Button>
-                <Button variant="outline" size="sm" onClick={ () => router.push( "/admin/passwords" ) }>
-                  <KeyRound /> Passwords
-                </Button>
-              </>
-            ) }
-          </nav>
-        </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-6xl space-y-5 px-4 py-5">
-        <div>
-          <h2 className="text-lg font-semibold">{ prettyDate }</h2>
-          <p className="text-sm text-muted-foreground">
-            { submittedCount } of { totalCounters } counters submitted
-            { isAdmin && waitingForYou > 0 && <> · <span className="font-medium text-warning">{ waitingForYou } waiting for your confirmation</span></> }
+    <AppShell
+      nav={ nav }
+      secondary={ secondary }
+      sidebarExtra={
+        isAdmin ? (
+          <TransferButton
+            refreshEntry={ async () => {} }
+            onClosed={ () => setTransferTick( n => n + 1 ) }
+            className="w-full justify-start"
+          />
+        ) : undefined
+      }
+      user={ { name: isAdmin ? "Admin" : "Supervisor", role: isAdmin ? "Admin" : "Supervisor (read-only)", onLogout: () => logout() } }
+      title="Overview"
+      subtitle={ `${ prettyDate } · ${ submittedCount } of ${ totalCounters } counters submitted` }
+      width="max-w-6xl"
+      headerRight={
+        <Input
+          type="date"
+          value={ selectedDate }
+          onChange={ e => handleDateChange( e.target.value ) }
+          className="h-10 w-auto text-sm"
+          aria-label="Select date"
+        />
+      }
+    >
+      <div className="space-y-5">
+        { isAdmin && waitingForYou > 0 && (
+          <p className="flex items-center gap-2 rounded-xl bg-warning-soft px-4 py-3 text-sm font-medium text-warning" role="status">
+            <Clock className="size-4 shrink-0" aria-hidden />
+            { waitingForYou } day{ waitingForYou === 1 ? "" : "s" } waiting for your confirmation
           </p>
-        </div>
+        ) }
 
         {/* ================= SUMMARY ================= */ }
         <div className="grid gap-4 lg:grid-cols-3">
@@ -362,18 +317,23 @@ export default function AdminDashboard ( {
                 : "" }` }
           >
             <div className="text-sm text-muted-foreground">
-              { summary.totalShortage > 0.005
+              { submittedCount === 0
+                ? "Cash position"
+                : summary.totalShortage > 0.005
                 ? "Total shortage"
                 : summary.totalShortage < -0.005
                   ? "Total excess"
                   : "Cash position" }
             </div>
-            <div
-              className={ `mt-1 text-3xl font-semibold tracking-tight ${ summary.totalShortage > 0.005 ? "text-danger" : summary.totalShortage < -0.005 ? "text-info" : "text-success" }` }
-            >
-              { Math.abs( summary.totalShortage ) < 0.005 ? "Balanced" : `₹${ money( Math.abs( summary.totalShortage ) ) }` }
+            <div className="mt-2">
+              <DiffText
+                shortage={ submittedCount === 0 ? null : summary.totalShortage }
+                className="text-2xl tracking-tight"
+              />
             </div>
-            <p className="mt-2 text-xs text-muted-foreground">From counters that have submitted their day.</p>
+            <p className="mt-2 text-xs text-muted-foreground">
+              { submittedCount === 0 ? "No counter has submitted its day yet." : `Across the ${ submittedCount } counter${ submittedCount === 1 ? "" : "s" } that submitted.` }
+            </p>
           </Card>
         </div>
 
@@ -522,6 +482,11 @@ export default function AdminDashboard ( {
               const shortage = entry.submittedShortage || 0
               const settled = entry.status !== "open"
               const flagged = entry.openingVerifyStatus === "not_verified"
+              const expectedCash = calculateExpectedCashWithInOut( entry.openingCash, cashSales, entry.payments )
+              const countedCash =
+                settled && typeof entry.submittedActualCash === "number"
+                  ? entry.submittedActualCash
+                  : calculateClosingCash( entry.closingDenominations )
 
               return (
                 <Card key={ entry._id } className="p-5">
@@ -571,26 +536,25 @@ export default function AdminDashboard ( {
                     </div>
                   </div>
 
-                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                  <div className="mt-4">
+                    <div className="text-xs text-muted-foreground">Expected in the drawer</div>
+                    <div className="text-2xl font-semibold tabular-nums">₹{ money( expectedCash ) }</div>
+                    <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <span className="tabular-nums text-muted-foreground">
+                        { settled || countedCash > 0 ? `Counted ₹${ money( countedCash ) }` : "Not counted yet" }
+                      </span>
+                      <DiffText shortage={ settled ? shortage : null } />
+                    </div>
+                  </div>
+
+                  <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 border-t pt-4 text-sm">
                     <Metric label="Total sales" value={ `₹${ money( totalSales ) }` } strong />
                     <Metric label="Cash sales" value={ `₹${ money( cashSales ) }` } />
                     <Metric label="Payments out" value={ `₹${ money( totalOut ) }` } />
                     <Metric label="Available cash" value={ `₹${ money( availableCash ) }` } />
                   </dl>
 
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-                    <div className="text-sm">
-                      { !settled ? (
-                        <span className="text-muted-foreground">Not submitted yet</span>
-                      ) : Math.abs( shortage ) < 0.005 ? (
-                        <span className="font-medium text-success">Balanced</span>
-                      ) : shortage > 0 ? (
-                        <span className="font-semibold text-danger">Shortage ₹{ money( shortage ) }</span>
-                      ) : (
-                        <span className="font-semibold text-info">Excess ₹{ money( -shortage ) }</span>
-                      ) }
-                    </div>
-
+                  <div className="mt-4 flex flex-wrap items-center justify-end gap-3 border-t pt-4">
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={ () => setSelectedEntry( entry ) }>
                         <Eye /> Details
@@ -612,7 +576,7 @@ export default function AdminDashboard ( {
             } ) }
           </div>
         </section>
-      </main>
+      </div>
 
       { selectedEntry && (
         <AdminEntryDetailModal
@@ -630,7 +594,7 @@ export default function AdminDashboard ( {
           } }
         />
       ) }
-    </div>
+    </AppShell>
   )
 }
 

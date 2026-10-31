@@ -1,56 +1,41 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { useRouter } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { logout } from "@/app/actions/auth"
+import { AppShell } from "@/components/app-shell"
+import { adminNav, type AdminPage } from "@/components/admin-nav"
 
-/** Shared frame for the smaller admin pages: sticky header with a back button, centred content. */
+/** Frame for the admin's pages (in-charges, passwords, reconciliation): the shared shell with the admin navigation. */
 export default function PageShell({
+  page,
   title,
   subtitle,
-  backHref,
-  backLabel = "Back",
   right,
   children,
   width = "max-w-3xl",
+  hasBottomBar = false,
 }: {
+  page: AdminPage
   title: string
   subtitle?: string
-  backHref?: string
-  backLabel?: string
   right?: ReactNode
   children: ReactNode
   width?: string
+  hasBottomBar?: boolean
 }) {
-  const router = useRouter()
-
+  const { nav, secondary } = adminNav(page)
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b bg-card/90 backdrop-blur">
-        <div className={`mx-auto flex w-full items-center gap-3 px-4 py-3 ${width}`}>
-          {backHref && (
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => router.push(backHref)}
-              aria-label={backLabel}
-              title={backLabel}
-            >
-              <ArrowLeft />
-            </Button>
-          )}
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-base font-semibold leading-tight">{title}</h1>
-            {subtitle && (
-              <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
-            )}
-          </div>
-          {right}
-        </div>
-      </header>
-
-      <main className={`mx-auto w-full space-y-5 px-4 py-5 ${width}`}>{children}</main>
-    </div>
+    <AppShell
+      nav={nav}
+      secondary={secondary}
+      user={{ name: "Admin", role: "Admin", onLogout: () => logout() }}
+      title={title}
+      subtitle={subtitle}
+      headerRight={right}
+      width={width}
+      hasBottomBar={hasBottomBar}
+    >
+      <div className="space-y-5">{children}</div>
+    </AppShell>
   )
 }

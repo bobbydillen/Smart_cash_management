@@ -64,10 +64,9 @@ export default function InchargeManagement({
 
   return (
     <PageShell
+      page="incharges"
       title="In-charges"
       subtitle="The people named on counter and purchase records"
-      backHref="/admin"
-      backLabel="Back to dashboard"
     >
       <div className="grid grid-cols-2 gap-1 rounded-xl border bg-card p-1">
         {(["counter", "purchase"] as const).map((g) => (

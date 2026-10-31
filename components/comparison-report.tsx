@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import { useRouter } from "next/navigation"
 import {
   Bar,
   BarChart,
@@ -15,7 +14,10 @@ import {
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ArrowLeft, ChevronLeft, ChevronRight, Printer } from "lucide-react"
+import { ChevronLeft, ChevronRight, Printer } from "lucide-react"
+import { logout } from "@/app/actions/auth"
+import { AppShell } from "@/components/app-shell"
+import { adminNav } from "@/components/admin-nav"
 import type { DayEntry } from "@/lib/types"
 import { getEntriesInRange } from "@/app/actions/admin"
 import {
@@ -307,7 +309,6 @@ const td = "px-2 py-1.5 text-right tabular-nums whitespace-nowrap"
 
 export default function ComparisonReport ( { backHref }: { backHref: string } )
 {
-  const router = useRouter()
   const today = todayIST()
 
   const [ mode, setMode ] = useState<Mode>( "daily" )
@@ -447,31 +448,26 @@ export default function ComparisonReport ( { backHref }: { backHref: string } )
           : `Excess ₹${ inr( -totals.diff ) }`
 
   /* ================= RENDER ================= */
+  const isAdminView = backHref === "/admin"
+  const shellNav = adminNav( "reports", isAdminView )
   return (
-    <div className="viz-root min-h-screen bg-muted/40 p-4 sm:p-6 print:bg-white print:p-0">
+    <AppShell
+      nav={ shellNav.nav }
+      secondary={ shellNav.secondary }
+      user={ { name: isAdminView ? "Admin" : "Supervisor", role: isAdminView ? "Admin" : "Supervisor (read-only)", onLogout: () => logout() } }
+      title="Reports"
+      subtitle="Compare counters by day, week or month"
+      width="max-w-7xl"
+      headerRight={
+        <Button variant="outline" onClick={ () => window.print() }>
+          <Printer />
+          <span className="hidden sm:inline">Print</span>
+        </Button>
+      }
+    >
       <style>{ TOKENS }</style>
 
-      <div className="mx-auto max-w-7xl space-y-5">
-        {/* ---------- HEADER ---------- */ }
-        <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-          <div>
-            <h1 className="text-2xl font-bold">Counter Reports</h1>
-            <p className="text-sm text-muted-foreground">
-              Compare counters by day, week or month
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={ () => window.print() }>
-              <Printer className="mr-2 h-4 w-4" />
-              Print
-            </Button>
-            <Button variant="outline" onClick={ () => router.push( backHref ) }>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Button>
-          </div>
-        </div>
-
+      <div className="viz-root space-y-5">
         <div className="hidden print:block">
           <h1 className="text-xl font-bold">
             Counter Report — { mode === "daily" ? "Daily" : mode === "weekly" ? "Weekly" : "Monthly" }
@@ -773,7 +769,7 @@ export default function ComparisonReport ( { backHref }: { backHref: string } )
           </>
         ) }
       </div>
-    </div>
+    </AppShell>
   )
 }
 

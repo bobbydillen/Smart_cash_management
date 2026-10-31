@@ -218,6 +218,12 @@ export function todayIST(): string {
 export const inr = (n: number) =>
   n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+/** Money in lists: no ".00" on whole rupees, two decimals only when there are paise. */
+export const inrWhole = (n: number) => {
+  const r = Math.round(n * 100) / 100
+  return Number.isInteger(r) ? r.toLocaleString("en-IN") : inr(r)
+}
+
 export const inrCompact = (n: number) =>
   new Intl.NumberFormat("en-IN", {
     notation: "compact",

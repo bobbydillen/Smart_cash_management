@@ -102,10 +102,9 @@ export default function PasswordManagement({ users }: PasswordManagementProps) {
 
   return (
     <PageShell
+      page="passwords"
       title="Passwords"
       subtitle="Change the password for any account"
-      backHref="/admin"
-      backLabel="Back to dashboard"
     >
       {!selectedUser ? (
         <Card className="p-2">

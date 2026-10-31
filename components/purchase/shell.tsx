@@ -2,20 +2,21 @@
 
 import type { ReactNode } from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { ArrowLeft, LogOut, PackageSearch } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { usePathname } from "next/navigation"
+import { CalendarCheck, Landmark, Ticket, TrendingUp, Truck } from "lucide-react"
 import { logout } from "@/app/actions/auth"
+import { AppShell, type NavItem } from "@/components/app-shell"
+import { adminNav } from "@/components/admin-nav"
 
-const TABS = [
-  { href: "/purchase", label: "Today", exact: true },
-  { href: "/purchase/vendors", label: "Vendors" },
-  { href: "/purchase/cheques", label: "Cheques" },
-  { href: "/purchase/vouchers", label: "Vouchers" },
-  { href: "/purchase/reports", label: "Reports" },
+const SECTIONS = [
+  { href: "/purchase", label: "Today", exact: true, icon: CalendarCheck },
+  { href: "/purchase/vendors", label: "Vendors", icon: Truck },
+  { href: "/purchase/cheques", label: "Cheques", icon: Landmark },
+  { href: "/purchase/vouchers", label: "Vouchers", icon: Ticket },
+  { href: "/purchase/reports", label: "Reports", icon: TrendingUp },
 ]
 
-/** Header and section tabs shared by every purchase page. */
+/** The frame for every purchase page. The purchase counter navigates its own sections; the admin keeps the admin navigation. */
 export default function PurchaseShell({
   role,
   children,
@@ -24,55 +25,43 @@ export default function PurchaseShell({
   children: ReactNode
 }) {
   const pathname = usePathname()
-  const router = useRouter()
-  const backHref = role === "admin" ? "/admin" : "/supervisor"
+  const isActive = (t: (typeof SECTIONS)[number]) => (t.exact ? pathname === t.href : pathname.startsWith(t.href))
+  const current = SECTIONS.find(isActive) ?? SECTIONS[0]
+
+  const own: NavItem[] = SECTIONS.map((t) => ({ id: t.href, label: t.label, icon: t.icon, href: t.href, active: isActive(t) }))
+  const admin = adminNav(pathname.startsWith("/purchase/cheques") ? "cheques" : "purchase", role === "admin")
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-20 border-b bg-card/90 backdrop-blur">
-        <div className="mx-auto w-full max-w-4xl px-4">
-          <div className="flex items-center gap-3 py-3">
-            {role !== "purchase" && (
-              <Button variant="outline" size="icon" onClick={() => router.push(backHref)} aria-label="Back to dashboard" title="Back to dashboard">
-                <ArrowLeft />
-              </Button>
-            )}
-            <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
-              <PackageSearch className="size-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h1 className="truncate text-base font-semibold leading-tight">Purchase</h1>
-              <p className="truncate text-xs text-muted-foreground">
-                {role === "purchase" ? "Vendors, bills and payments" : "Viewing as " + role}
-              </p>
-            </div>
-            {role === "purchase" && (
-              <Button variant="ghost" size="icon" onClick={() => logout()} aria-label="Log out" title="Log out">
-                <LogOut />
-              </Button>
-            )}
-          </div>
-
-          <nav className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-3" aria-label="Purchase sections">
-            {TABS.map((t) => {
-              const active = t.exact ? pathname === t.href : pathname.startsWith(t.href)
-              return (
-                <Link
-                  key={t.href}
-                  href={t.href}
-                  className={`whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
-                    active ? "bg-primary text-primary-foreground shadow-sm" : "bg-secondary text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                  }`}
-                >
-                  {t.label}
-                </Link>
-              )
-            })}
+    <AppShell
+      brand={{ name: "Smart Cash", sub: "Purchase counter" }}
+      nav={role === "purchase" ? own : admin.nav}
+      secondary={role === "purchase" ? [] : admin.secondary}
+      user={
+        role === "purchase"
+          ? { name: "Purchase", role: "Purchase counter", onLogout: () => logout() }
+          : { name: role === "admin" ? "Admin" : "Supervisor", role: role === "admin" ? "Admin" : "Supervisor (read-only)", onLogout: () => logout() }
+      }
+      title={current.label}
+      subtitle={role === "purchase" ? "Purchase counter" : `Purchase · viewing as ${role}`}
+      width="max-w-4xl"
+      toolbar={
+        role === "purchase" ? undefined : (
+          <nav className="-mx-1 flex gap-1 overflow-x-auto px-1" aria-label="Purchase sections">
+            {SECTIONS.map((t) => (
+              <Link
+                key={t.href}
+                href={t.href}
+                aria-current={isActive(t) ? "page" : undefined}
+                className={`whitespace-nowrap rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${isActive(t) ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"}`}
+              >
+                {t.label}
+              </Link>
+            ))}
           </nav>
-        </div>
-      </header>
-
-      <main className="mx-auto w-full max-w-4xl space-y-5 px-4 py-5 pb-16">{children}</main>
-    </div>
+        )
+      }
+    >
+      <div className="space-y-5">{children}</div>
+    </AppShell>
   )
 }

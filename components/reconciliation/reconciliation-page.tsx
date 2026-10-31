@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import PageShell from "@/components/page-shell"
+import { ShellBar } from "@/components/app-shell"
 import SectionHeader from "@/components/section-header"
 import StatusChip from "@/components/status-chip"
 import { Notice } from "@/components/notice"
@@ -438,13 +439,13 @@ export default function ReconciliationPage({ token }: { token: string | null }) 
 
   return (
     <PageShell
+      page="reconciliation"
+      hasBottomBar
       title="Payments reconciliation"
       subtitle="Match the day's sales against bank, PhonePe and card payments"
-      backHref="/admin"
-      backLabel="Back to dashboard"
       width="max-w-4xl"
     >
-      <div className="space-y-5 pb-28">
+      <div className="space-y-5">
         {!token && (
           <Notice tone="danger">
             The reconciliation is not set up on this server yet: add <b>RECON_SECRET</b> to the project's environment variables and redeploy.
@@ -648,8 +649,9 @@ export default function ReconciliationPage({ token }: { token: string | null }) 
       </div>
 
       {/* run bar */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t bg-card/95 backdrop-blur print:hidden">
-        <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+      <div className="print:hidden">
+        <ShellBar>
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2" aria-live="polite">
             <StatusChip tone={shops.length > 0 && posDone === shops.length ? "success" : "neutral"} dot={false}>
               {shops.length > 0 && posDone === shops.length ? "✓" : "○"} Billing {posDone}/{shops.length}
@@ -670,6 +672,7 @@ export default function ReconciliationPage({ token }: { token: string | null }) 
             )}
           </Button>
         </div>
+        </ShellBar>
       </div>
     </PageShell>
   )

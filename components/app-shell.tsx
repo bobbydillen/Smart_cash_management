@@ -97,18 +97,18 @@ export function AppShell({
   width?: string
 }) {
   const [more, setMore] = useState(false)
-  const needMore = nav.length > 4 || secondary.length > 0
+  const needMore = true
   const tabs = nav.length > 4 ? nav.slice(0, 3) : nav
   const overflow = [...(nav.length > 4 ? nav.slice(3) : []), ...secondary]
 
   return (
-    <div className="min-h-dvh bg-secondary text-foreground md:flex">
+    <div className="min-h-dvh bg-secondary text-foreground md:flex print:block print:bg-white">
       <a href="#main" className="sr-only z-50 rounded-lg bg-card px-3 py-2 text-sm focus:not-sr-only focus:fixed focus:left-3 focus:top-3">
         Skip to content
       </a>
 
       {/* ---------- sidebar (computers) ---------- */}
-      <aside className="sticky top-0 hidden h-dvh w-[var(--sidebar-w)] shrink-0 flex-col gap-1 p-3 md:flex">
+      <aside className="sticky top-0 hidden h-dvh print:!hidden w-[var(--sidebar-w)] shrink-0 flex-col gap-1 p-3 md:flex">
         <div className="mb-3 flex items-center gap-2.5 px-1 pt-1">
           <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-foreground text-xs font-bold text-background" aria-hidden>
             SC
@@ -151,16 +151,16 @@ export function AppShell({
       </aside>
 
       {/* ---------- the white sheet ---------- */}
-      <div className="flex min-h-dvh min-w-0 flex-1 flex-col md:min-h-0 md:p-2 md:pl-0">
-        <div className="flex min-h-0 flex-1 flex-col bg-card md:rounded-2xl md:border">
-          <header className="sticky top-0 z-20 flex items-center gap-3 border-b bg-card/95 px-4 py-3 backdrop-blur md:rounded-t-2xl md:px-6">
+      <div className="flex min-h-dvh min-w-0 flex-1 flex-col md:min-h-0 md:p-2 md:pl-0 print:p-0">
+        <div className="flex min-h-0 flex-1 flex-col bg-card md:rounded-2xl md:border print:border-0">
+          <header className="sticky top-0 z-20 flex items-center print:hidden gap-3 border-b bg-card/95 px-4 py-3 backdrop-blur md:rounded-t-2xl md:px-6">
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-lg font-semibold leading-tight">{title}</h1>
               {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
             </div>
             {headerRight}
           </header>
-          {toolbar && <div className="border-b px-4 py-2 md:px-6">{toolbar}</div>}
+          {toolbar && <div className="border-b px-4 py-2 md:px-6 print:hidden">{toolbar}</div>}
           <main id="main" tabIndex={-1} className={`mx-auto w-full flex-1 px-4 py-5 outline-none md:px-6 ${width} ${hasBottomBar ? "pb-40 md:pb-28" : "pb-28 md:pb-8"}`}>
             {children}
           </main>
@@ -168,7 +168,7 @@ export function AppShell({
       </div>
 
       {/* ---------- tabs (phones) ---------- */}
-      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-40 flex h-[var(--tabs-h)] gap-1 border-t bg-secondary px-2 pt-1 pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-40 flex h-[var(--tabs-h)] print:hidden gap-1 border-t bg-secondary px-2 pt-1 pb-[env(safe-area-inset-bottom)] md:hidden">
         {tabs.map((n) => (
           <NavEntry key={n.id} item={n} variant="tab" />
         ))}

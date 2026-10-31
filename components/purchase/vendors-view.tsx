@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import StatusChip from "@/components/status-chip"
 import { ChevronRight, Plus, Search } from "lucide-react"
 import { VendorForm } from "./forms"
-import { inr } from "@/lib/report"
+import { inrWhole } from "@/lib/report"
 import type { VendorRow } from "@/lib/purchase-service"
 
 export default function VendorsView({
@@ -41,8 +41,8 @@ export default function VendorsView({
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-3 gap-3">
-        <Summary label="Total to pay" value={`₹${inr(totalToPay)}`} />
-        <Summary label="Vouchers pending" value={`₹${inr(vouchers)}`} />
+        <Summary label="Total to pay" value={`₹${inrWhole(totalToPay)}`} />
+        <Summary label="Vouchers pending" value={`₹${inrWhole(vouchers)}`} />
         <Summary label="Vendors owed" value={`${owed} of ${active.length}`} />
       </div>
 
@@ -83,17 +83,24 @@ export default function VendorsView({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="truncate font-medium">{v.name}</span>
+                    <span className="font-medium">{v.name}</span>
                     {!v.active && <StatusChip tone="neutral" dot={false}>Inactive</StatusChip>}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">{v.items || v.phone || "—"}</div>
+                  {/* phone: the amount sits under the name, so the name keeps the full width */}
+                  <div className="mt-1 flex flex-wrap items-baseline gap-x-2 sm:hidden">
+                    <span className={`text-sm font-semibold tabular-nums ${v.balance.totalToPay > 0.004 ? "" : "text-muted-foreground"}`}>
+                      {v.balance.totalToPay > 0.004 ? `₹${inrWhole(v.balance.totalToPay)}` : "Nothing due"}
+                    </span>
+                    {v.balance.vouchersPending > 0.004 && <span className="text-xs text-warning">incl. ₹{inrWhole(v.balance.vouchersPending)} vouchers</span>}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <div className={`text-sm font-semibold ${v.balance.totalToPay > 0.004 ? "" : "text-muted-foreground"}`}>
-                    {v.balance.totalToPay > 0.004 ? `₹${inr(v.balance.totalToPay)}` : "Nothing due"}
+                <div className="hidden text-right sm:block">
+                  <div className={`text-sm font-semibold tabular-nums ${v.balance.totalToPay > 0.004 ? "" : "text-muted-foreground"}`}>
+                    {v.balance.totalToPay > 0.004 ? `₹${inrWhole(v.balance.totalToPay)}` : "Nothing due"}
                   </div>
                   {v.balance.vouchersPending > 0.004 && (
-                    <div className="text-xs text-warning">incl. ₹{inr(v.balance.vouchersPending)} vouchers</div>
+                    <div className="text-xs text-warning">incl. ₹{inrWhole(v.balance.vouchersPending)} vouchers</div>
                   )}
                 </div>
                 <ChevronRight className="size-4 text-muted-foreground" />
