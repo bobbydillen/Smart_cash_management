@@ -14,6 +14,7 @@ import {
 import { GROUP_LABEL, type InchargeGroup } from "@/lib/incharge-group"
 import PageShell from "./page-shell"
 import SectionHeader from "./section-header"
+import { ask } from "@/components/confirm-host"
 
 const initials = (name: string) =>
   name
@@ -52,7 +53,7 @@ export default function InchargeManagement({
   }
 
   const handleToggle = async (i: Incharge) => {
-    if (i.active && !confirm(`Remove ${i.name} from the list?`)) return
+    if (i.active && !await ask(`Remove ${i.name} from the list?`)) return
     await setInchargeActive(i._id, !i.active)
     await reload()
   }
@@ -80,7 +81,7 @@ export default function InchargeManagement({
               group === g ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            {GROUP_LABEL[g]} <span className="opacity-70">({count(g)})</span>
+            {GROUP_LABEL[g]} <span className="font-normal">({count(g)})</span>
           </button>
         ))}
       </div>
@@ -92,7 +93,7 @@ export default function InchargeManagement({
           subtitle={WHERE[group]}
         />
         <div className="mt-4 flex gap-2">
-          <Input
+          <Input aria-label="Full name"
             placeholder="Full name"
             value={name}
             maxLength={60}

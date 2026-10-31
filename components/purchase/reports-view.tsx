@@ -74,7 +74,7 @@ export default function ReportsView({ vendors }: { vendors: VendorRow[] }) {
           </Button>
         </div>
         <div className="flex items-center gap-2">
-          <Input type="month" value={month} max={today.slice(0, 7)} onChange={(e) => e.target.value && setMonth(e.target.value)} className="h-9 w-40 text-sm" />
+          <Input aria-label="Month" type="month" value={month} max={today.slice(0, 7)} onChange={(e) => e.target.value && setMonth(e.target.value)} className="h-9 w-40 text-sm" />
           <Button variant="outline" onClick={() => window.print()}>
             <Printer /> Print
           </Button>

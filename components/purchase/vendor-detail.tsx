@@ -31,6 +31,7 @@ import { cancelCashPayment, cancelVendorReturn, cancelVoucher, changeChequeStatu
 import { inr, shortDate, todayIST } from "@/lib/report"
 import { buildTimeline, payerLabel, type BillWithStatus, type ChequeStatus, type TimelineEvent, type Voucher } from "@/lib/purchase"
 import type { VendorDetail, VendorRow } from "@/lib/purchase-service"
+import { ask } from "@/components/confirm-host"
 
 const BILL_TONE = { unpaid: "danger", part: "warning", paid: "success" } as const
 const BILL_LABEL = { unpaid: "Unpaid", part: "Part paid", paid: "Paid" } as const
@@ -199,7 +200,7 @@ export default function VendorDetailView({
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => confirm(`Cancel voucher ${v.number}? The bill goes back to unpaid.`) && act(() => cancelVoucher(v._id))}
+                        onClick={async () => await ask(`Cancel voucher ${v.number}? The bill goes back to unpaid.`) && act(() => cancelVoucher(v._id))}
                       >
                         Cancel
                       </Button>
@@ -268,7 +269,7 @@ export default function VendorDetailView({
                           size="sm"
                           variant="ghost"
                           className="text-danger hover:bg-danger-soft hover:text-danger"
-                          onClick={() => confirm(`Delete bill ${b.billNumber}?`) && act(() => removeBill(b._id))}
+                          onClick={async () => await ask(`Delete bill ${b.billNumber}?`) && act(() => removeBill(b._id))}
                         >
                           <Trash2 /> Delete
                         </Button>
@@ -313,7 +314,7 @@ export default function VendorDetailView({
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => confirm("Mark this cheque as bounced? The amount goes back to what we owe.") && act(() => changeChequeStatus(c._id, "bounced"))}
+                      onClick={async () => await ask("Mark this cheque as bounced? The amount goes back to what we owe.") && act(() => changeChequeStatus(c._id, "bounced"))}
                     >
                       Bounced
                     </Button>
@@ -367,7 +368,7 @@ export default function VendorDetailView({
                       className="size-8 text-danger hover:bg-danger-soft hover:text-danger"
                       aria-label="Cancel this return"
                       title="Cancel this return"
-                      onClick={() => confirm(`Cancel the ₹${inr(r.amount)} return? It goes back on what we owe.`) && act(() => cancelVendorReturn(r._id))}
+                      onClick={async () => await ask(`Cancel the ₹${inr(r.amount)} return? It goes back on what we owe.`) && act(() => cancelVendorReturn(r._id))}
                     >
                       <X />
                     </Button>
@@ -421,7 +422,7 @@ export default function VendorDetailView({
                         className="size-8 text-danger hover:bg-danger-soft hover:text-danger"
                         aria-label="Cancel this payment"
                         title="Cancel this payment"
-                        onClick={() => confirm(`Cancel the ₹${inr(p.amount)} cash payment?`) && act(() => cancelCashPayment(p._id))}
+                        onClick={async () => await ask(`Cancel the ₹${inr(p.amount)} cash payment?`) && act(() => cancelCashPayment(p._id))}
                       >
                         <X />
                       </Button>

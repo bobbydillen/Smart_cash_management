@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import FigureSkeleton from "@/components/figure-skeleton"
 import
 {
   updateSales,
@@ -67,6 +68,7 @@ export default function SalesPage ( {
 
   const [ savedSales, setSavedSales ] = useState<SalesData>( entry.sales )
   const [ openingCash, setOpeningCash ] = useState( 0 )
+  const [ openingLoaded, setOpeningLoaded ] = useState( false )
 
   /* ================= SYNC ON DATE CHANGE ================= */
 
@@ -76,6 +78,7 @@ export default function SalesPage ( {
     setSavedSales( entry.sales )
     setInputs( {} )
     setHasUnsavedChanges( false )
+    setOpeningLoaded( false )
   }, [ entry.date ] )
 
   /* ================= OPENING CASH ================= */
@@ -85,6 +88,7 @@ export default function SalesPage ( {
     getOpeningCashForDate( entry.date ).then( res =>
     {
       if ( "cash" in res ) setOpeningCash( res.cash )
+      setOpeningLoaded( true )
     } )
   }, [ entry.date, entry.updatedAt ] )
 
@@ -277,7 +281,7 @@ export default function SalesPage ( {
         />
 
         <div className="mt-4 space-y-2">
-          <SummaryRow label="Opening cash" value={ openingCash } />
+          <SummaryRow label="Opening cash" value={ openingCash } loading={ !openingLoaded } />
           <SummaryRow label="Cash sales" value={ savedCashSales } sign="+" tone="success" />
           <SummaryRow label="Money in" value={ totalIn } sign="+" tone="success" />
           <SummaryRow label="Money out" value={ totalOut } sign="−" tone="danger" />
@@ -286,7 +290,7 @@ export default function SalesPage ( {
         <div className="mt-4 flex items-center justify-between rounded-xl bg-accent px-4 py-3">
           <span className="text-sm font-medium text-accent-foreground">Expected cash</span>
           <span className="text-xl font-semibold text-accent-foreground">
-            ₹{ expectedCash.toLocaleString( "en-IN", { minimumFractionDigits: 2 } ) }
+            { openingLoaded ? `₹${ expectedCash.toLocaleString( "en-IN", { minimumFractionDigits: 2 } ) }` : <FigureSkeleton className="h-6 w-28" /> }
           </span>
         </div>
       </Card>
@@ -298,10 +302,10 @@ export default function SalesPage ( {
 /* ================= SMALL UI HELPERS ================= */
 
 const LabeledInput = ( { label, children }: any ) => (
-  <div>
-    <label className="mb-1.5 block text-sm font-medium">{ label }</label>
+  <label className="block">
+    <span className="mb-1.5 block text-sm font-medium">{ label }</span>
     { children }
-  </div>
+  </label>
 )
 
 const Section = ( { title, children }: any ) => (
@@ -320,13 +324,13 @@ const PreviewCash = ( { label, value }: any ) => (
   </div>
 )
 
-const SummaryRow = ( { label, value, sign, tone }: any ) => (
+const SummaryRow = ( { label, value, sign, tone, loading }: any ) => (
   <div className="flex items-center justify-between text-sm">
     <span className="text-muted-foreground">{ label }</span>
     <span
       className={ `font-medium ${ tone === "success" ? "text-success" : tone === "danger" ? "text-danger" : "" }` }
     >
-      { sign }₹{ value.toLocaleString( "en-IN", { minimumFractionDigits: 2 } ) }
+      { loading ? <FigureSkeleton className="h-4 w-20" /> : <>{ sign }₹{ value.toLocaleString( "en-IN", { minimumFractionDigits: 2 } ) }</> }
     </span>
   </div>
 )

@@ -125,7 +125,7 @@ function SalesStack ( {
   return (
     <Card className="p-5 break-inside-avoid">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="font-semibold">{ title }</h3>
+        <h2 className="font-semibold">{ title }</h2>
         <Legend items={ SERIES.map( s => ( { label: s.label, color: s.color } ) ) } />
       </div>
       { note && <p className="mb-2 text-xs text-muted-foreground">{ note }</p> }
@@ -177,7 +177,7 @@ function DiffChart ( { data }: { data: { label: string; value: number | null }[]
   return (
     <Card className="p-5 break-inside-avoid">
       <div className="mb-1 flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="font-semibold">Shortage / excess by day</h3>
+        <h2 className="font-semibold">Shortage / excess by day</h2>
         <Legend
           items={ [
             { label: "Shortage", color: "var(--short)" },
@@ -459,7 +459,7 @@ export default function ComparisonReport ( { backHref }: { backHref: string } )
       subtitle="Compare counters by day, week or month"
       width="max-w-7xl"
       headerRight={
-        <Button variant="outline" onClick={ () => window.print() }>
+        <Button variant="outline" onClick={ () => window.print() } aria-label="Print">
           <Printer />
           <span className="hidden sm:inline">Print</span>
         </Button>
@@ -510,7 +510,7 @@ export default function ComparisonReport ( { backHref }: { backHref: string } )
 
           <div className="flex items-center gap-2">
             { mode === "monthly" ? (
-              <Input
+              <Input aria-label="Month"
                 type="month"
                 value={ month }
                 max={ today.slice( 0, 7 ) }
@@ -518,7 +518,7 @@ export default function ComparisonReport ( { backHref }: { backHref: string } )
                 className="w-44"
               />
             ) : (
-              <Input
+              <Input aria-label="Date"
                 type="date"
                 value={ date }
                 max={ today }
@@ -605,7 +605,7 @@ export default function ComparisonReport ( { backHref }: { backHref: string } )
             {/* ---------- DAILY TABLE ---------- */ }
             { mode === "daily" && (
               <Card className="p-4 print:border-none print:p-0 print:shadow-none">
-                <h3 className="mb-3 font-semibold">Counter details</h3>
+                <h2 className="mb-3 font-semibold">Counter details</h2>
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse text-xs">
                     <thead>
@@ -659,7 +659,7 @@ export default function ComparisonReport ( { backHref }: { backHref: string } )
             { mode !== "daily" && (
               <>
                 <Card className="p-4 print:border-none print:p-0 print:shadow-none">
-                  <h3 className="mb-3 font-semibold">By counter</h3>
+                  <h2 className="mb-3 font-semibold">By counter</h2>
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse text-xs">
                       <thead>
@@ -714,7 +714,7 @@ export default function ComparisonReport ( { backHref }: { backHref: string } )
                 </Card>
 
                 <Card className="p-4 print:border-none print:p-0 print:shadow-none">
-                  <h3 className="mb-3 font-semibold">By day</h3>
+                  <h2 className="mb-3 font-semibold">By day</h2>
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse text-xs">
                       <thead>

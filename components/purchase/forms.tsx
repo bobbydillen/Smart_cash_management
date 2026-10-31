@@ -104,7 +104,7 @@ export function VendorForm({
                     </span>
                     <span className="block truncate text-xs text-muted-foreground">{v.items || v.phone || "No details"}</span>
                   </span>
-                  <span className="shrink-0 text-xs font-medium text-primary">Open</span>
+                  <span className="shrink-0 text-sm font-medium text-accent-foreground">Open</span>
                 </button>
               ))}
             </div>

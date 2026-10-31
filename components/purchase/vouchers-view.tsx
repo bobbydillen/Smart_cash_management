@@ -13,6 +13,7 @@ import { cancelVoucher } from "@/app/actions/purchase"
 import { inr, shortDate, todayIST } from "@/lib/report"
 import type { VoucherStatus } from "@/lib/purchase"
 import type { VoucherRow } from "@/lib/purchase-service"
+import { ask } from "@/components/confirm-host"
 
 type Filter = VoucherStatus | "all"
 const FILTERS: { id: Filter; label: string }[] = [
@@ -54,7 +55,7 @@ export default function VouchersView({
     )
 
   const cancel = async (v: VoucherRow) => {
-    if (!confirm(`Cancel voucher ${v.number}? The bill goes back to unpaid.`)) return
+    if (!await ask(`Cancel voucher ${v.number}? The bill goes back to unpaid.`)) return
     setError("")
     const res = await cancelVoucher(v._id)
     if (res.error) return setError(res.error)

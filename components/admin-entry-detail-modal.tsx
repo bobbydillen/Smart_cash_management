@@ -33,6 +33,7 @@ import {
   revertOpeningOverride,
   updateEntryOpeningCash,
 } from "@/app/actions/admin"
+import { ask, notify } from "@/components/confirm-host"
 
 /* ================= CONSTANTS ================= */
 
@@ -163,7 +164,7 @@ export default function AdminEntryDetailModal ( {
   const handleRevert = async () =>
   {
     if (
-      !confirm(
+      !await ask(
         `Remove the override and restore the opening cash to ₹${ ( originalCash ?? 0 ).toFixed( 2 ) }?`
       )
     )
@@ -171,7 +172,7 @@ export default function AdminEntryDetailModal ( {
     setBusy( true )
     const res = await revertOpeningOverride( entry._id! )
     setBusy( false )
-    if ( res.error ) return alert( res.error )
+    if ( res.error ) return await notify( res.error )
     onUpdate()
   }
 
@@ -477,7 +478,7 @@ export default function AdminEntryDetailModal ( {
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₹</span>
-                    <input
+                    <input aria-label="Corrected opening cash"
                       type="number"
                       inputMode="decimal"
                       className="h-10 w-full rounded-lg border bg-card pl-7 pr-3 text-base outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 md:text-sm"

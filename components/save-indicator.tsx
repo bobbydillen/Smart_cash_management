@@ -24,7 +24,7 @@ export default function SaveIndicator ( {
   if ( status === "saved" )
     return (
       <span className="flex items-center gap-1.5 text-xs text-success font-medium">
-        <Check className="w-3.5 h-3.5" /> Saved successfully
+        <Check className="w-3.5 h-3.5 animate-in zoom-in-50 duration-200" aria-hidden="true" /> Saved successfully
       </span>
     )
   if ( status === "error" )

@@ -247,7 +247,7 @@ export default function CounterDashboard ( {
         </div>
       }
     >
-      <div className="space-y-5">
+      <div key={ onOpening ? "opening" : currentPage } className="animate-in space-y-5 fade-in-0 duration-150">
         { entry.status === "open" && entry.date === today && (
           <IncomingTransfersBanner
             canAccept={ !!entry.openingVerified }

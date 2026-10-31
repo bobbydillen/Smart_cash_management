@@ -35,6 +35,7 @@ import { AppShell } from "./app-shell"
 import { adminNav } from "./admin-nav"
 import DiffText from "./diff-text"
 import { useRouter } from "next/navigation"
+import { ask, notify } from "@/components/confirm-host"
 
 /* ================= HELPERS ================= */
 
@@ -126,7 +127,7 @@ export default function AdminDashboard ( {
 
   const handleConfirm = async ( id: string ) =>
   {
-    if ( confirm( "Confirm this entry?" ) )
+    if ( await ask( "Confirm this entry?" ) )
     {
       await confirmEntry( id )
       const fresh = await getAllEntries( selectedDate )
@@ -140,7 +141,7 @@ export default function AdminDashboard ( {
 
   const handleUnlock = async ( id: string ) =>
   {
-    if ( confirm( "Unlock this entry?" ) )
+    if ( await ask( "Unlock this entry?" ) )
     {
       await unlockEntry( id )
       setEntries( await getAllEntries( selectedDate ) )
@@ -149,17 +150,17 @@ export default function AdminDashboard ( {
 
   const handlePurchaseConfirm = async () =>
   {
-    if ( !confirm( "Confirm the purchase counter's day?" ) ) return
+    if ( !await ask( "Confirm the purchase counter's day?" ) ) return
     const res = await confirmPurchaseDay( selectedDate )
-    if ( res.error ) return alert( res.error )
+    if ( res.error ) return await notify( res.error )
     setPurchase( await loadDayView( selectedDate ) )
   }
 
   const handlePurchaseUnlock = async () =>
   {
-    if ( !confirm( "Unlock the purchase counter's day so it can be changed?" ) ) return
+    if ( !await ask( "Unlock the purchase counter's day so it can be changed?" ) ) return
     const res = await unlockPurchaseDay( selectedDate )
-    if ( res.error ) return alert( res.error )
+    if ( res.error ) return await notify( res.error )
     setPurchase( await loadDayView( selectedDate ) )
   }
 

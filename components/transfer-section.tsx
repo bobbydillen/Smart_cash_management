@@ -15,6 +15,7 @@ import {
   getTransferTargets,
   type Transfer,
 } from "@/app/actions/transfer"
+import { ask, notify } from "@/components/confirm-host"
 
 const STATUS_TONE: Record<Transfer["status"], "warning" | "success" | "neutral"> = {
   pending: "warning",
@@ -67,7 +68,7 @@ export default function TransferSection ( {
 
   const handleSend = async () =>
   {
-    if ( !confirm( `Transfer ₹${ amt.toFixed( 2 ) } to ${ to }?` ) ) return
+    if ( !await ask( `Transfer ₹${ amt.toFixed( 2 ) } to ${ to }?` ) ) return
     setError( "" )
     setBusy( true )
     const res = await createTransfer( to, amt, note )
@@ -81,9 +82,9 @@ export default function TransferSection ( {
 
   const handleCancel = async ( id: string ) =>
   {
-    if ( !confirm( "Cancel this transfer? The cash goes back to your drawer." ) ) return
+    if ( !await ask( "Cancel this transfer? The cash goes back to your drawer." ) ) return
     const res = await cancelTransfer( id )
-    if ( res.error ) return alert( res.error )
+    if ( res.error ) return await notify( res.error )
     await Promise.all( [ load(), refreshEntry() ] )
   }
 
@@ -106,7 +107,7 @@ export default function TransferSection ( {
       { !isReadOnly && (
         <div className="mt-4 space-y-3 rounded-xl bg-secondary/60 p-3">
           <div className="grid gap-2 sm:grid-cols-[1fr_9rem]">
-            <select
+            <select aria-label="Transfer to"
               value={ to }
               onChange={ ( e ) => setTo( e.target.value ) }
               className="h-10 w-full rounded-lg border bg-card px-3 text-sm"
@@ -123,7 +124,7 @@ export default function TransferSection ( {
               <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                 ₹
               </span>
-              <Input
+              <Input aria-label="Amount"
                 type="number"
                 inputMode="decimal"
                 placeholder="0.00"
@@ -134,7 +135,7 @@ export default function TransferSection ( {
             </div>
           </div>
 
-          <Input
+          <Input aria-label="Note (optional)"
             placeholder="Note (optional)"
             value={ note }
             maxLength={ 200 }

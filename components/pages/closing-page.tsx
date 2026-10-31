@@ -36,6 +36,7 @@ import {
 } from "lucide-react"
 import SectionHeader from "@/components/section-header"
 import { ShellBar } from "@/components/app-shell"
+import FigureSkeleton from "@/components/figure-skeleton"
 import { inr as fmt } from "@/lib/report"
 import StatusChip from "@/components/status-chip"
 import { Switch } from "@/components/ui/switch"
@@ -56,6 +57,7 @@ import {
   notesTotal,
   subtractDenoms,
 } from "@/lib/next-day"
+import { notify } from "@/components/confirm-host"
 
 /* ================= CONSTANTS ================= */
 
@@ -109,18 +111,20 @@ function RecRow ( {
   value,
   sign,
   tone,
+  loading,
 }: {
   label: string
   value: number
   sign?: string
   tone?: "success" | "danger"
+  loading?: boolean
 } )
 {
   return (
     <div className="flex items-center justify-between">
       <span className="text-muted-foreground">{ label }</span>
       <span className={ `font-medium ${ tone === "success" ? "text-success" : tone === "danger" ? "text-danger" : "" }` }>
-        { sign }₹{ value.toLocaleString( "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 } ) }
+        { loading ? <FigureSkeleton className="h-4 w-20" /> : <>{ sign }₹{ value.toLocaleString( "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 } ) }</> }
       </span>
     </div>
   )
@@ -188,6 +192,7 @@ export default function ClosingPage ( {
 
   const [ closedBy, setClosedBy ] = useState( entry.closedBy || "" )
   const [ openingCash, setOpeningCash ] = useState( 0 )
+  const [ openingLoaded, setOpeningLoaded ] = useState( false )
   const printRef = useRef<HTMLDivElement>( null )
 
   const [ incharges, setIncharges ] = useState<Incharge[]>( [] )
@@ -236,6 +241,7 @@ export default function ClosingPage ( {
     getOpeningCashForDate( entry.date ).then( res =>
     {
       if ( "cash" in res ) setOpeningCash( res.cash )
+      setOpeningLoaded( true )
     } )
   }, [ entry.date ] )
 
@@ -523,7 +529,7 @@ export default function ClosingPage ( {
   {
     if ( entry.payments.length > 0 && !entry.paymentRefNumber )
     {
-      alert(
+      await notify(
         "❌ Payment Entry Number is required because payments were recorded."
       )
       return
@@ -532,43 +538,43 @@ export default function ClosingPage ( {
     // ❌ VALIDATION: Closed By is mandatory
     if ( !closedBy || !closedBy.trim() )
     {
-      alert( "❌ Please select who is closing the day (Closed By) before submitting." )
+      await notify( "❌ Please select who is closing the day (Closed By) before submitting." )
       return
     }
 
     if ( !isNextConfirmed )
     {
-      alert( "❌ Please confirm the next-day opening cash before submitting the day." )
+      await notify( "❌ Please confirm the next-day opening cash before submitting the day." )
       return
     }
 
     if ( !allRowsTicked )
     {
-      alert( "❌ Tick every available cash denomination before submitting the day." )
+      await notify( "❌ Tick every available cash denomination before submitting the day." )
       return
     }
     if ( !handoverTicked )
     {
-      alert( "❌ Turn on \"Available cash checked\" before submitting the day." )
+      await notify( "❌ Turn on \"Available cash checked\" before submitting the day." )
       return
     }
     if ( !( await rowsSave.flush() ) )
     {
-      alert( "❌ Your ticks could not be saved. Please try again." )
+      await notify( "❌ Your ticks could not be saved. Please try again." )
       return
     }
 
     // the closing count must be stored before the day is locked
     if ( !( await closingSave.flush() ) )
     {
-      alert( "❌ Closing cash could not be saved. Please try again." )
+      await notify( "❌ Closing cash could not be saved. Please try again." )
       return
     }
 
     const res = await submitDay( entry.date, closedBy.trim() )
     if ( res && "error" in res && res.error )
     {
-      alert( `❌ ${ res.error }` )
+      await notify( `❌ ${ res.error }` )
       return
     }
     await refreshEntry()
@@ -723,13 +729,13 @@ export default function ClosingPage ( {
           subtitle="What the drawer should hold against what you counted"
         />
         <div className="mt-4 space-y-2 text-sm">
-          <RecRow label="Opening cash" value={ openingCash } />
+          <RecRow label="Opening cash" value={ openingCash } loading={ !openingLoaded } />
           <RecRow label="Cash sales" value={ cashSales } sign="+" tone="success" />
           <RecRow label="Payments in" value={ totalIn } sign="+" tone="success" />
           <RecRow label="Payments out" value={ totalOut } sign="−" tone="danger" />
           <div className="flex items-center justify-between border-t pt-2 font-semibold">
             <span>Expected cash</span>
-            <span>₹{ fmt( expectedCash ) }</span>
+            <span>{ openingLoaded ? `₹${ fmt( expectedCash ) }` : <FigureSkeleton className="h-5 w-24" /> }</span>
           </div>
           <div className="flex items-center justify-between font-semibold">
             <span>Counted cash</span>
@@ -781,7 +787,7 @@ export default function ClosingPage ( {
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                   ₹
                 </span>
-                <Input
+                <Input aria-label="Notes needed for tomorrow"
                   type="number"
                   inputMode="numeric"
                   min={ 0 }
@@ -815,7 +821,7 @@ export default function ClosingPage ( {
             !isReadOnly && !nextLocked && coinOverride !== null ? (
               <button
                 type="button"
-                className="text-xs font-medium text-primary hover:underline"
+                className="text-sm font-medium text-accent-foreground hover:underline"
                 onClick={ () =>
                 {
                   setReviewing( false )
@@ -1057,7 +1063,7 @@ export default function ClosingPage ( {
           <div className="mt-3 text-sm font-medium">{ closedBy || "—" }</div>
         ) : (
           <>
-            <select
+            <select aria-label="Closed by"
               className="mt-3 h-10 w-full rounded-lg border bg-card px-3 text-sm"
               value={ closedBy }
               disabled={ loadingNames }
@@ -1316,16 +1322,18 @@ export default function ClosingPage ( {
             <dl className="grid flex-1 grid-cols-[auto_auto_1fr] gap-x-4 gap-y-1 text-sm" aria-live="polite">
               <div>
                 <dt className="text-xs text-muted-foreground">Expected</dt>
-                <dd className="font-semibold tabular-nums">₹{ bar( expectedCash ) }</dd>
+                <dd className="font-semibold tabular-nums">{ openingLoaded ? `₹${ bar( expectedCash ) }` : <FigureSkeleton className="h-5 w-16" /> }</dd>
               </div>
               <div>
                 <dt className="text-xs text-muted-foreground">Counted</dt>
-                <dd className="font-semibold tabular-nums">₹{ bar( actualCash ) }</dd>
+                <dd key={ actualCash } className="animate-in font-semibold tabular-nums fade-in-0 duration-200">₹{ bar( actualCash ) }</dd>
               </div>
               <div className="min-w-0">
                 <dt className="text-xs text-muted-foreground">Difference</dt>
-                <dd>
-                  { Math.abs( shortage ) < 0.005 ? (
+                <dd key={ Math.round( shortage * 100 ) } className="animate-in fade-in-0 duration-200">
+                  { !openingLoaded ? (
+                    <FigureSkeleton className="h-5 w-20" />
+                  ) : Math.abs( shortage ) < 0.005 ? (
                     <span className="inline-flex items-center gap-1 font-medium text-success"><Check className="size-4" aria-hidden /> Balanced</span>
                   ) : shortage > 0 ? (
                     <span className="inline-flex items-center gap-1 font-semibold text-danger"><ArrowDown className="size-4 shrink-0" aria-hidden /> Short <span className="tabular-nums">₹{ bar( shortage ) }</span></span>
@@ -1349,7 +1357,7 @@ export default function ClosingPage ( {
                 size="lg"
                 className="flex-1 sm:flex-none sm:px-8"
                 onClick={ handleSubmit }
-                disabled={ !readyToSubmit }
+                disabled={ !readyToSubmit || !openingLoaded }
               >
                 Submit day
               </Button>

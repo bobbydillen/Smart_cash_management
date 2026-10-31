@@ -160,7 +160,7 @@ export function AppShell({
             </div>
             {headerRight}
           </header>
-          {toolbar && <div className="border-b px-4 py-2 md:px-6 print:hidden">{toolbar}</div>}
+          {toolbar && <section aria-label="Date and actions" className="border-b px-4 py-2 md:px-6 print:hidden">{toolbar}</section>}
           <main id="main" tabIndex={-1} className={`mx-auto w-full flex-1 px-4 py-5 outline-none md:px-6 ${width} ${hasBottomBar ? "pb-40 md:pb-28" : "pb-28 md:pb-8"}`}>
             {children}
           </main>

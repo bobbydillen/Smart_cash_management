@@ -8,6 +8,7 @@ import {
   getMyTransfers,
   type Transfer,
 } from "@/app/actions/transfer"
+import { ask } from "@/components/confirm-host"
 
 /**
  * Shown at the top of the counter page whenever another counter has sent
@@ -42,7 +43,7 @@ export default function IncomingTransfersBanner ( {
   const handleAccept = async ( t: Transfer ) =>
   {
     if (
-      !confirm(
+      !await ask(
         `Have you received ₹${ t.amount.toFixed( 2 ) } from ${ t.from }? It will be added to your cash.`
       )
     )

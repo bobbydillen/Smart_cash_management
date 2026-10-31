@@ -10,6 +10,7 @@ import { loadCounterVendors, loadVendorVouchers, payVendor, payVoucher } from "@
 import { inr, todayIST } from "@/lib/report"
 import type { Payment } from "@/lib/types"
 import type { CounterVendor, CounterVoucher } from "@/lib/purchase-service"
+import { ask } from "@/components/confirm-host"
 
 const selectClass = "h-10 w-full rounded-lg border bg-card px-3 text-sm"
 
@@ -29,6 +30,7 @@ const Money = ({
   <div className="relative">
     <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₹</span>
     <Input
+      aria-label={placeholder}
       type="number"
       inputMode="decimal"
       placeholder={placeholder}
@@ -92,7 +94,7 @@ export default function VendorPaymentSection({
   }, [vendorId])
 
   const payOneVoucher = async (v: CounterVoucher) => {
-    if (!confirm(`Pay voucher ${v.number} of ₹${inr(v.amount)} to ${vendor?.name} in cash? It will be recorded as Money out.`)) return
+    if (!await ask(`Pay voucher ${v.number} of ₹${inr(v.amount)} to ${vendor?.name} in cash? It will be recorded as Money out.`)) return
     setError("")
     setBusy(true)
     const res = await payVoucher(v._id)
@@ -118,7 +120,7 @@ export default function VendorPaymentSection({
   const ready = !!vendorId && !!billNumber.trim() && billTotal > 0 && paying > 0 && !over
 
   const pay = async () => {
-    if (!confirm(`Pay ₹${inr(paying)} to ${vendor?.name} for new bill ${billNumber.trim()} (bill amount ₹${inr(billTotal)})? It will be recorded as Money out.`)) return
+    if (!await ask(`Pay ₹${inr(paying)} to ${vendor?.name} for new bill ${billNumber.trim()} (bill amount ₹${inr(billTotal)})? It will be recorded as Money out.`)) return
     setError("")
     setBusy(true)
     const res = await payVendor({ vendorId, billNumber, billDate, billAmount: billTotal, amount: paying, note })
@@ -156,7 +158,7 @@ export default function VendorPaymentSection({
           <div className="mt-4 space-y-3 rounded-xl bg-secondary/60 p-3">
             <div>
               <Label>Vendor</Label>
-              <select className={selectClass} value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
+              <select aria-label="Vendor" className={selectClass} value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
                 <option value="">Choose vendor…</option>
                 {vendors.map((v) => (
                   <option key={v._id} value={v._id}>
@@ -205,11 +207,11 @@ export default function VendorPaymentSection({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Bill number</Label>
-                <Input value={billNumber} maxLength={40} placeholder="e.g. SLT-2301" onChange={(e) => setBillNumber(e.target.value)} />
+                <Input aria-label="Bill number" value={billNumber} maxLength={40} placeholder="e.g. SLT-2301" onChange={(e) => setBillNumber(e.target.value)} />
               </div>
               <div>
                 <Label>Bill date</Label>
-                <Input type="date" value={billDate} max={today} onChange={(e) => setBillDate(e.target.value)} />
+                <Input aria-label="Bill date" type="date" value={billDate} max={today} onChange={(e) => setBillDate(e.target.value)} />
               </div>
             </div>
 
@@ -245,7 +247,7 @@ export default function VendorPaymentSection({
               </div>
             )}
 
-            <Input placeholder="Note (optional)" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
+            <Input aria-label="Note (optional)" placeholder="Note (optional)" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
 
             <Button className="w-full" onClick={pay} disabled={busy || !ready}>
               {busy ? "Paying…" : paying > 0 ? `Pay ₹${inr(paying)}` : "Pay vendor"}

@@ -427,7 +427,7 @@ export default function ReconciliationPage({ token }: { token: string | null }) 
   }
 
   const shopSelect = (value: string, onChange: (v: string) => void) => (
-    <select className={selectClass} value={shops.includes(value) ? value : ""} onChange={(e) => onChange(e.target.value)}>
+    <select aria-label="Mainly used by (optional)" className={selectClass} value={shops.includes(value) ? value : ""} onChange={(e) => onChange(e.target.value)}>
       <option value="">Not sure</option>
       {shops.map((s) => (
         <option key={s} value={s}>
@@ -469,14 +469,14 @@ export default function ReconciliationPage({ token }: { token: string | null }) 
                 <Label>Business date</Label>
                 <div className="relative">
                   <CalendarDays className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input type="date" value={date} max={todayIST()} onChange={(e) => setDate(e.target.value)} className="pl-9" />
+                  <Input aria-label="Business date" type="date" value={date} max={todayIST()} onChange={(e) => setDate(e.target.value)} className="pl-9" />
                 </div>
               </div>
               <div>
                 <Label>Shop names (comma separated)</Label>
                 <div className="relative">
                   <Store className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input value={shopsText} onChange={(e) => setShopsText(e.target.value)} className="pl-9" />
+                  <Input aria-label="Shop names, comma separated" value={shopsText} onChange={(e) => setShopsText(e.target.value)} className="pl-9" />
                 </div>
               </div>
             </div>
@@ -526,7 +526,7 @@ export default function ReconciliationPage({ token }: { token: string | null }) 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
                       <Label>Account name</Label>
-                      <Input value={b.label} onChange={(e) => patchBank(j, { label: e.target.value })} />
+                      <Input aria-label="Account name" value={b.label} onChange={(e) => patchBank(j, { label: e.target.value })} />
                     </div>
                     <div>
                       <Label>Mainly used by (optional)</Label>
@@ -581,7 +581,7 @@ export default function ReconciliationPage({ token }: { token: string | null }) 
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div>
                         <Label>Machine name</Label>
-                        <Input value={m.label} onChange={(e) => patchMachine(j, { label: e.target.value })} />
+                        <Input aria-label="Machine name" value={m.label} onChange={(e) => patchMachine(j, { label: e.target.value })} />
                       </div>
                       <div>
                         <Label>Mainly used by (optional)</Label>
@@ -590,7 +590,7 @@ export default function ReconciliationPage({ token }: { token: string | null }) 
                     </div>
                     <div className="mt-3">
                       <Label>Card payments from the slip: just type the amounts</Label>
-                      <textarea
+                      <textarea aria-label="Card payments from the slip: type the amounts"
                         rows={4}
                         inputMode="decimal"
                         value={m.text}
@@ -605,7 +605,7 @@ export default function ReconciliationPage({ token }: { token: string | null }) 
                       </div>
                     </div>
                     <details className="mt-3">
-                      <summary className="cursor-pointer text-xs font-medium text-primary">Optional: add time / reference, or upload a CSV</summary>
+                      <summary className="cursor-pointer text-sm font-medium text-accent-foreground">Optional: add time / reference, or upload a CSV</summary>
                       <p className="my-2 text-xs text-muted-foreground">
                         Time and reference are never required. To add them, write a line like <code>17:03,620,097776</code> (time, amount, ref); it can be mixed
                         with plain amounts. Or upload a CSV instead.
@@ -629,7 +629,7 @@ export default function ReconciliationPage({ token }: { token: string | null }) 
               <ArrowRightLeft className="size-4 text-muted-foreground" /> Direct bank transfers
               <span className="text-xs font-normal text-muted-foreground">optional</span>
             </div>
-            <textarea
+            <textarea aria-label="Direct bank transfers: one amount per line"
               rows={3}
               value={transfers}
               onChange={(e) => setTransfers(e.target.value)}

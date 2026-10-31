@@ -11,6 +11,7 @@ import {
 } from "@/app/actions/transfer"
 import SectionHeader from "./section-header"
 import StatusChip from "./status-chip"
+import { ask, notify } from "@/components/confirm-host"
 
 const LABEL: Record<Transfer["status"], string> = {
   pending: "Pending",
@@ -45,9 +46,9 @@ export default function AdminTransfersPanel ( {
 
   const handleAck = async ( id: string ) =>
   {
-    if ( !confirm( "Confirm you have received this cash?" ) ) return
+    if ( !await ask( "Confirm you have received this cash?" ) ) return
     const res = await acknowledgeTransfer( id )
-    if ( res.error ) alert( res.error )
+    if ( res.error ) await notify( res.error )
     await load()
   }
 

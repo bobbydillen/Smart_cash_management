@@ -49,6 +49,7 @@ import { calculateClosingCash } from "@/lib/types"
 import { inr, shortDate } from "@/lib/report"
 import type { DayView, VendorRow } from "@/lib/purchase-service"
 import type { CashMove } from "@/lib/purchase"
+import { ask } from "@/components/confirm-host"
 
 export default function TodayView({
   view,
@@ -259,8 +260,8 @@ export default function TodayView({
                     className="size-8 text-danger hover:bg-danger-soft hover:text-danger"
                     aria-label="Cancel this payment"
                     title="Cancel this payment"
-                    onClick={() => {
-                      if (confirm(`Cancel the ₹${inr(p.amount)} cash payment to ${p.vendorName}?`)) run(() => cancelCashPayment(p._id))
+                    onClick={async () => {
+                      if (await ask(`Cancel the ₹${inr(p.amount)} cash payment to ${p.vendorName}?`)) run(() => cancelCashPayment(p._id))
                     }}
                   >
                     <X />
@@ -402,7 +403,7 @@ export default function TodayView({
             <div className="mt-3 flex gap-2">
               <div className="relative flex-1">
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">₹</span>
-                <Input
+                <Input aria-label="Amount to keep for tomorrow"
                   type="number"
                   inputMode="numeric"
                   min={0}
@@ -539,8 +540,8 @@ export default function TodayView({
                 <Button
                   variant="ghost"
                   disabled={busy}
-                  onClick={() => {
-                    if (confirm("Unlock this day so it can be changed?")) run(() => unlockPurchaseDay(date))
+                  onClick={async () => {
+                    if (await ask("Unlock this day so it can be changed?")) run(() => unlockPurchaseDay(date))
                   }}
                 >
                   <Unlock /> Unlock
@@ -713,8 +714,8 @@ function MoveRow({
               className="size-7"
               aria-label="Remove this entry"
               title="Remove this entry"
-              onClick={() => {
-                if (confirm(`Remove this ₹${inr(m.amount)} entry?`)) onRemove(m.id)
+              onClick={async () => {
+                if (await ask(`Remove this ₹${inr(m.amount)} entry?`)) onRemove(m.id)
               }}
             >
               <X />

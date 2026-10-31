@@ -30,6 +30,7 @@ import { inr as money } from "@/lib/report"
 import StatusChip from "@/components/status-chip"
 import VendorPaymentSection from "@/components/vendor-payment-section"
 import { todayIST } from "@/lib/report"
+import { ask } from "@/components/confirm-host"
 
 interface PaymentsPageProps
 {
@@ -161,14 +162,14 @@ export default function PaymentsPage ( {
 
   const handleDelete = async ( index: number ) =>
   {
-    if ( !confirm( "Delete this entry?" ) ) return
+    if ( !await ask( "Delete this entry?" ) ) return
     await apply( () => deletePayment( index, entry.date ) )
   }
 
   const handleCancelVendorPayment = async ( p: Payment ) =>
   {
     if ( !p.vendorPaymentId ) return
-    if ( !confirm( `Cancel the ₹${ money( p.amount ) } payment to the vendor? The vendor's balance goes back up.` ) ) return
+    if ( !await ask( `Cancel the ₹${ money( p.amount ) } payment to the vendor? The vendor's balance goes back up.` ) ) return
     await apply( async () =>
     {
       const res = await cancelVendorPayment( p.vendorPaymentId! )
@@ -244,7 +245,7 @@ export default function PaymentsPage ( {
             </div>
 
             <div className="grid gap-2 sm:grid-cols-[1fr_9rem_auto]">
-              <Input
+              <Input aria-label="What is it for?"
                 placeholder="What is it for?"
                 value={ desc }
                 onChange={ e => setDesc( e.target.value ) }
@@ -253,7 +254,7 @@ export default function PaymentsPage ( {
                 <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                   ₹
                 </span>
-                <Input
+                <Input aria-label="Amount"
                   type="number"
                   inputMode="decimal"
                   placeholder="0.00"
@@ -291,7 +292,7 @@ export default function PaymentsPage ( {
             {
               return (
                 <div key={ i } className="space-y-2 rounded-xl border-2 border-primary/30 bg-accent/40 p-3">
-                  <select
+                  <select aria-label="Money in or money out"
                     value={ editType }
                     onChange={ e => setEditType( e.target.value as "IN" | "OUT" ) }
                     className="h-10 w-full rounded-lg border bg-card px-3 text-sm"
@@ -300,8 +301,8 @@ export default function PaymentsPage ( {
                     <option value="IN">Money in</option>
                   </select>
                   <div className="grid grid-cols-[1fr_8rem] gap-2">
-                    <Input value={ editDesc } onChange={ e => setEditDesc( e.target.value ) } />
-                    <Input
+                    <Input aria-label="Description" value={ editDesc } onChange={ e => setEditDesc( e.target.value ) } />
+                    <Input aria-label="Amount"
                       type="number"
                       inputMode="decimal"
                       value={ editAmount }
@@ -425,7 +426,7 @@ export default function PaymentsPage ( {
               { entry.paymentRefNumber || "—" }
             </div>
           ) : (
-            <Input
+            <Input aria-label="Payment entry number"
               value={ paymentRef }
               onChange={ e => setPaymentRef( e.target.value ) }
               placeholder="Billing / payment reference number"

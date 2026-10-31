@@ -68,14 +68,11 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-background px-4 py-10">
-      {/* soft background glow */}
-      <div className="pointer-events-none absolute -top-40 left-1/2 size-[36rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
-
-      <div className="relative w-full max-w-md">
+    <main className="flex min-h-dvh flex-col items-center justify-center bg-secondary px-4 py-10">
+      <div className="w-full max-w-md">
         {/* brand */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
+          <div className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-foreground text-background" aria-hidden="true">
             <Banknote className="size-7" />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">Smart Cash</h1>
@@ -91,9 +88,7 @@ export default function LoginPage() {
             </p>
 
             <div>
-              <div className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Counters
-              </div>
+              <h2 className="mb-2 px-1 text-sm font-semibold text-muted-foreground">Counters</h2>
               <div className="space-y-2">
                 {counters.map((c) => (
                   <RoleRow key={c.username} item={c} onClick={() => setSelected(c.username)} />
@@ -102,9 +97,7 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <div className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Management
-              </div>
+              <h2 className="mb-2 px-1 text-sm font-semibold text-muted-foreground">Management</h2>
               <div className="space-y-2">
                 {management.map((c) => (
                   <RoleRow key={c.username} item={c} onClick={() => setSelected(c.username)} />
@@ -115,13 +108,13 @@ export default function LoginPage() {
         ) : (
           <form
             onSubmit={handleLogin}
-            className="space-y-5 rounded-2xl border bg-card p-6 shadow-sm"
+            className="space-y-5 rounded-2xl border bg-card p-6"
           >
             <button
               type="button"
               onClick={back}
               disabled={loading}
-              className="-ml-1 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+              className="-ml-2 inline-flex h-11 items-center gap-1 rounded-lg px-2 text-sm text-muted-foreground hover:text-foreground"
             >
               <ArrowLeft className="size-4" /> All accounts
             </button>
@@ -149,6 +142,9 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
+                  autoComplete="current-password"
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? "login-error" : undefined}
                   autoFocus
                   disabled={loading}
                   className="h-11 pr-11"
@@ -156,7 +152,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShow((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  className="absolute right-0 top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-lg text-muted-foreground hover:text-foreground"
                   aria-label={show ? "Hide password" : "Show password"}
                 >
                   {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -165,7 +161,7 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <div className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">
+              <div id="login-error" role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">
                 {error}
               </div>
             )}
@@ -176,7 +172,7 @@ export default function LoginPage() {
           </form>
         )}
       </div>
-    </div>
+    </main>
   )
 }
 
@@ -191,7 +187,7 @@ function RoleRow({
   return (
     <button
       onClick={onClick}
-      className="group flex w-full items-center gap-3 rounded-2xl border bg-card px-4 py-3.5 text-left shadow-[0_1px_2px_rgb(0_0_0/0.04)] transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-md"
+      className="group flex min-h-14 w-full items-center gap-3 rounded-2xl border bg-card px-4 py-3 text-left transition-colors hover:border-primary/40 hover:bg-accent/40"
     >
       <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
         <Icon className="size-5" />

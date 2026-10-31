@@ -14,6 +14,7 @@ import { daysFrom, relativeDay } from "./common"
 import { addDays, inr, shortDate, todayIST, weekdayShort } from "@/lib/report"
 import type { Bank, ChequeStatus } from "@/lib/purchase"
 import type { ChequeRow } from "@/lib/purchase-service"
+import { ask } from "@/components/confirm-host"
 
 type Role = "purchase" | "admin" | "supervisor"
 type Mode = "due" | "all"
@@ -192,11 +193,11 @@ function DueView({
         <Card className="flex flex-wrap items-end gap-3 p-4 print:hidden">
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">From</label>
-            <Input type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className="w-44" />
+            <Input aria-label="From date" type="date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} className="w-44" />
           </div>
           <div>
             <label className="mb-1 block text-xs text-muted-foreground">To</label>
-            <Input type="date" value={to} onChange={(e) => e.target.value && setTo(e.target.value)} className="w-44" />
+            <Input aria-label="To date" type="date" value={to} onChange={(e) => e.target.value && setTo(e.target.value)} className="w-44" />
           </div>
           <p className="pb-2 text-xs text-muted-foreground">Cheques dated on or between these days.</p>
         </Card>
@@ -339,7 +340,7 @@ function ChequeLine({
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => confirm("Mark this cheque as bounced? The amount goes back to what we owe the vendor.") && act(c._id, "bounced")}
+            onClick={async () => await ask("Mark this cheque as bounced? The amount goes back to what we owe the vendor.") && act(c._id, "bounced")}
           >
             Bounced
           </Button>
@@ -371,7 +372,7 @@ function BanksCard({ banks }: { banks: Bank[] }) {
     router.refresh()
   }
   const toggle = async (b: Bank) => {
-    if (b.active && !confirm(`Remove ${b.name} from the list? Old cheques keep their bank.`)) return
+    if (b.active && !await ask(`Remove ${b.name} from the list? Old cheques keep their bank.`)) return
     await toggleBank(b._id, !b.active)
     router.refresh()
   }
@@ -400,7 +401,7 @@ function BanksCard({ banks }: { banks: Bank[] }) {
       {open && (
         <div className="mt-4 space-y-4 border-t pt-4">
           <div className="flex gap-2">
-            <Input
+            <Input aria-label="Bank name"
               placeholder="Add a bank, e.g. State Bank of India"
               value={name}
               maxLength={60}
@@ -531,14 +532,14 @@ function AllView({
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => confirm("Mark this cheque as bounced? The amount goes back to what we owe the vendor.") && act(c._id, "bounced")}
+                      onClick={async () => await ask("Mark this cheque as bounced? The amount goes back to what we owe the vendor.") && act(c._id, "bounced")}
                     >
                       Bounced
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
-                      onClick={() => confirm("Cancel this cheque? The amount goes back to what we owe the vendor.") && act(c._id, "cancelled")}
+                      onClick={async () => await ask("Cancel this cheque? The amount goes back to what we owe the vendor.") && act(c._id, "cancelled")}
                     >
                       Cancel
                     </Button>
