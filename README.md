@@ -13,6 +13,21 @@ and confirms every day.
 | **Supervisor** | Read-only view of the admin dashboard and reports |
 | **Purchase** | Vendors, bills, payments (cash / cheque / voucher), the purchase cash drawer, cheque and voucher tracking, reports |
 
+## Payments reconciliation (admin only)
+
+Admin dashboard -> **Reconciliation**. Upload the day's billing exports (Excel), bank statements (Federal Bank PDF), PhonePe/EDC
+settlement (CSV) and type in card-machine amounts; every payment is matched against all shops' bills and an Excel report is downloaded.
+Nothing is stored. It uses the admin sign-in, so there is no separate password.
+
+How it is built: the matching engine is Python (`recon/`, served by `api/recon.py`) and runs next to the Next.js app on Vercel.
+The page is `components/reconciliation/reconciliation-page.tsx` (same components and theme as the rest of the app). The server page
+hands a signed-in admin a short-lived token signed with **`RECON_SECRET`**; the engine refuses requests without a valid token.
+
+- **Vercel:** add the environment variable `RECON_SECRET` (any long random string, for Production and Preview) before deploying.
+- **Local:** run `npm run recon:dev` (starts the engine on port 5000) next to `npm run dev`; needs Python 3.10+ and `pip install -r requirements.txt`.
+  No secret is needed locally.
+- Limits: about 4 MB of uploads per run and 60 seconds, the same as before.
+
 ## A counter's day
 
 1. **Opening cash** - the day opens with what the last closed day kept. The in-charge

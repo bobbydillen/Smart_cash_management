@@ -21,6 +21,7 @@ import {
   BarChart3,
   PackageSearch,
   Landmark,
+  FileSearch,
   CheckCheck,
   Eye,
   ShieldCheck,
@@ -291,6 +292,15 @@ export default function AdminDashboard ( {
             <Button variant="outline" size="sm" onClick={ () => router.push( "/purchase" ) }>
               <PackageSearch /> Purchase
             </Button>
+            { isAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={ () => router.push( "/admin/reconciliation" ) }
+              >
+                <FileSearch /> Reconciliation
+              </Button>
+            ) }
             { isAdmin && (
               <TransferButton
                 refreshEntry={ async () => {} }

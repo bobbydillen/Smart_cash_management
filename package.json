@@ -8,6 +8,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "copy-db": "node --env-file=.env.local scripts/copy-db.mjs",
+    "recon:dev": "python api/recon.py",
     "test:purchase": "node --env-file=.env.local scripts/test-purchase.mjs"
   },
   "dependencies": {
