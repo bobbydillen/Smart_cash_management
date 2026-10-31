@@ -261,9 +261,9 @@ function Kpi ( {
       <div className="text-xs text-muted-foreground">{ label }</div>
       <div
         className={ `mt-1 text-xl font-bold tabular-nums ${ tone === "short"
-          ? "text-red-600"
+          ? "text-danger"
           : tone === "excess"
-            ? "text-green-700"
+            ? "text-success"
             : ""
           }` }
       >
@@ -281,19 +281,19 @@ function DiffCell ( { diff, settled }: { diff: number; settled: boolean } )
   if ( Math.abs( diff ) < 0.005 )
     return <span className="text-muted-foreground">Balanced</span>
   return diff > 0 ? (
-    <span className="font-semibold text-red-600">▲ Short { inr( diff ) }</span>
+    <span className="font-semibold text-danger">▲ Short { inr( diff ) }</span>
   ) : (
-    <span className="font-semibold text-green-700">▼ Excess { inr( -diff ) }</span>
+    <span className="font-semibold text-success">▼ Excess { inr( -diff ) }</span>
   )
 }
 
 const StatusPill = ( { status }: { status: string } ) => (
   <span
-    className={ `rounded-full px-2 py-0.5 text-[10px] font-semibold ${ status === "confirmed"
-      ? "bg-green-100 text-green-800"
+    className={ `rounded-full px-2 py-0.5 text-xs font-semibold ${ status === "confirmed"
+      ? "bg-success-soft text-success"
       : status === "submitted"
-        ? "bg-orange-100 text-orange-800"
-        : "bg-blue-100 text-blue-800"
+        ? "bg-warning-soft text-warning"
+        : "bg-info-soft text-info"
       }` }
   >
     { status.toUpperCase() }

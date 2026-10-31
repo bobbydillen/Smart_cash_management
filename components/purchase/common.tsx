@@ -23,10 +23,14 @@ export function Field({
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-sm font-medium">
-        {label} {required && <span className="text-danger">*</span>}
+      {/* the label wraps the control, so the control is announced with its name and a click on the text focuses it */}
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-medium">
+          {label} {required && <span className="text-danger" aria-hidden="true">*</span>}
+          {required && <span className="sr-only">(required)</span>}
+        </span>
+        {children}
       </label>
-      {children}
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   )

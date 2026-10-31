@@ -23,13 +23,13 @@ export default function SaveIndicator ( {
     return <span className="text-xs text-muted-foreground">Unsaved changes…</span>
   if ( status === "saved" )
     return (
-      <span className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+      <span className="flex items-center gap-1.5 text-xs text-success font-medium">
         <Check className="w-3.5 h-3.5" /> Saved successfully
       </span>
     )
   if ( status === "error" )
     return (
-      <span className="flex items-center gap-2 text-xs text-red-600 font-medium">
+      <span className="flex items-center gap-2 text-xs text-danger font-medium">
         <AlertCircle className="w-3.5 h-3.5" />
         Could not save{ error ? `: ${ error }` : "" }
         <button className="underline" onClick={ onRetry }>

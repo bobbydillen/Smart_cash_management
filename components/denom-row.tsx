@@ -44,13 +44,13 @@ export function DenomRow ( {
 {
   const clamp = ( n: number ) => Math.max( 0, max === undefined ? n : Math.min( n, max ) )
   return (
-    <div className="flex items-center gap-3 rounded-xl border bg-card px-3 py-2">
-      <div className="w-16 shrink-0">
+    <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 rounded-xl border bg-card px-3 py-2 sm:grid-cols-[4rem_1fr_6rem]">
+      <div className="min-w-0">
         <div className="text-sm font-semibold">{ label }</div>
-        { sub && <div className="text-[11px] text-muted-foreground">{ sub }</div> }
+        { sub && <div className="text-xs text-muted-foreground">{ sub }</div> }
       </div>
 
-      <div className="flex flex-1 items-center justify-center gap-1.5">
+      <div className="col-span-2 row-start-2 flex items-center justify-center gap-1.5 sm:col-span-1 sm:col-start-2 sm:row-start-1">
         { !disabled && (
           <Button
             type="button"
@@ -92,7 +92,7 @@ export function DenomRow ( {
         ) }
       </div>
 
-      <div className="w-24 shrink-0 text-right text-sm font-medium">
+      <div className="col-start-2 row-start-1 text-right text-sm font-medium tabular-nums sm:col-start-3">
         ₹{ amount.toLocaleString( "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 } ) }
       </div>
     </div>

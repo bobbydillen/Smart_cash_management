@@ -25,9 +25,9 @@
   --ring: oklch(0.5 0.2 268);
 
   /* status tones: solid colour + soft background */
-  --success: oklch(0.55 0.15 150);
+  --success: oklch(0.51 0.15 150);
   --success-soft: oklch(0.96 0.04 150);
-  --warning: oklch(0.6 0.15 65);
+  --warning: oklch(0.54 0.15 65);
   --warning-soft: oklch(0.97 0.05 85);
   --info: oklch(0.52 0.17 250);
   --info-soft: oklch(0.96 0.03 250);
@@ -163,5 +163,17 @@
   }
   input[type='number'] {
     -moz-appearance: textfield;
+  }
+}
+
+/* people who ask for less motion get none, except spinners that show work in progress */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.animate-spin),
+  *:not(.animate-spin)::before,
+  *:not(.animate-spin)::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

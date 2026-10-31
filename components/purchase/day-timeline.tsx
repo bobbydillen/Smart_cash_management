@@ -227,14 +227,14 @@ export default function DayTimeline({ view }: { view: DayView }) {
                   <div className="mt-0.5 text-xs text-muted-foreground">
                     {time(e.at)}
                     {e.by && ` · ${e.by}`}
-                    {e.tag && <span className="ml-1.5 rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-foreground">{e.tag}</span>}
+                    {e.tag && <span className="ml-1.5 rounded bg-secondary px-1.5 py-0.5 text-xs font-medium text-foreground">{e.tag}</span>}
                   </div>
                 </div>
                 <div className="text-right">
                   <div className={`text-sm font-semibold ${e.tone === "in" ? "text-success" : e.tone === "out" ? "text-danger" : ""}`}>
                     {e.tone === "in" ? "+" : e.tone === "out" ? "−" : ""}₹{inr(e.amount)}
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
+                  <div className="text-xs text-muted-foreground">
                     {e.drawer === 0 ? "drawer unchanged" : `drawer ₹${inr(e.balance)}`}
                   </div>
                 </div>
