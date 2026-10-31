@@ -1,5 +1,5 @@
 import type React from "react"
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
@@ -7,6 +7,13 @@ import ConfirmHost from "@/components/confirm-host"
 
 const geist = Geist( { subsets: [ "latin" ], variable: "--font-geist-sans" } )
 const geistMono = Geist_Mono( { subsets: [ "latin" ], variable: "--font-geist-mono" } )
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f1f3f7" },
+    { media: "(prefers-color-scheme: dark)", color: "#0c0f16" },
+  ],
+}
 
 export const metadata: Metadata = {
   title: "Smart Cash Management",

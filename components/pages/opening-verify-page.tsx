@@ -191,7 +191,7 @@ export default function OpeningVerifyPage ( {
               { entry.openingVerifiedAt && (
                 <>
                   { " " }·{ " " }
-                  { new Date( entry.openingVerifiedAt ).toLocaleString( "en-IN", {
+                  { new Date( entry.openingVerifiedAt ).toLocaleString( "en-IN", { timeZone: "Asia/Kolkata",
                     day: "2-digit",
                     month: "short",
                     hour: "2-digit",

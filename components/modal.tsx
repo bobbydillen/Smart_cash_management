@@ -74,7 +74,7 @@ export default function Modal({
       <div
         ref={panel}
         tabIndex={-1}
-        className={`max-h-[94vh] w-full animate-in overflow-y-auto fade-in-0 slide-in-from-bottom-4 outline-none duration-200 sm:zoom-in-95 sm:slide-in-from-bottom-0 rounded-t-3xl bg-background shadow-2xl sm:rounded-2xl ${
+        className={`max-h-[94vh] w-full animate-in overscroll-contain overflow-y-auto fade-in-0 slide-in-from-bottom-4 outline-none duration-200 sm:zoom-in-95 sm:slide-in-from-bottom-0 rounded-t-3xl bg-background shadow-2xl sm:rounded-2xl ${
           wide ? "sm:max-w-2xl" : "sm:max-w-lg"
         }`}
       >

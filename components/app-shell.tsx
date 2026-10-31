@@ -26,7 +26,7 @@ export interface NavItem {
   hint?: string
 }
 
-function NavEntry({ item, variant }: { item: NavItem; variant: "side" | "tab" | "sheet" }) {
+function NavEntry({ item, variant, onNavigate }: { item: NavItem; variant: "side" | "tab" | "sheet"; onNavigate?: () => void }) {
   const Icon = item.icon
   const base =
     variant === "side"
@@ -53,12 +53,20 @@ function NavEntry({ item, variant }: { item: NavItem; variant: "side" | "tab" | 
   }
   if (item.href && !item.disabled)
     return (
-      <Link href={item.href} {...common}>
+      <Link href={item.href} onClick={onNavigate} {...common}>
         {content}
       </Link>
     )
   return (
-    <button type="button" disabled={item.disabled} onClick={item.onSelect} {...common}>
+    <button
+      type="button"
+      disabled={item.disabled}
+      onClick={() => {
+        item.onSelect?.()
+        onNavigate?.()
+      }}
+      {...common}
+    >
       {content}
     </button>
   )
@@ -183,9 +191,7 @@ export function AppShell({
         <Modal title="More" onClose={() => setMore(false)}>
           <div className="space-y-1">
             {overflow.map((n) => (
-              <div key={n.id} onClick={() => setMore(false)}>
-                <NavEntry item={n} variant="sheet" />
-              </div>
+              <NavEntry key={n.id} item={n} variant="sheet" onNavigate={() => setMore(false)} />
             ))}
             {sidebarExtra && <div className="space-y-2 pt-2">{sidebarExtra}</div>}
             <div className="flex items-center justify-between gap-2 border-t pt-3">

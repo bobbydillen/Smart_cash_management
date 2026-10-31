@@ -494,7 +494,7 @@ export default function TodayView({
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-secondary/60 px-4 py-3">
                 {view.day.handoverReceivedAt ? (
                   <StatusChip tone="success">
-                    Received by {view.day.handoverReceivedBy} · {new Date(view.day.handoverReceivedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    Received by {view.day.handoverReceivedBy} · {new Date(view.day.handoverReceivedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                   </StatusChip>
                 ) : (
                   <>
@@ -682,7 +682,7 @@ function MoveRow({
   canEdit: boolean
   onRemove: (id: string) => void
 }) {
-  const time = new Date(m.time).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+  const time = new Date(m.time).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })
   const label = m.kind === "received" ? `Cash from ${m.party}` : m.kind ? m.party : out ? `Sent to ${m.party}` : m.party
   const removable = canEdit && !!m.kind
   const notes = m.denominations

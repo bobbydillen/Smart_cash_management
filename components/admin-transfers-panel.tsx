@@ -80,7 +80,7 @@ export default function AdminTransfersPanel ( {
               </div>
               <div className="text-xs text-muted-foreground">
                 { t.date }{ " " }
-                { new Date( t.createdAt ).toLocaleTimeString( "en-IN", { hour: "2-digit", minute: "2-digit" } ) }
+                { new Date( t.createdAt ).toLocaleTimeString( "en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" } ) }
                 { t.note && ` · ${ t.note }` }
                 { t.resolvedBy && ` · by ${ t.resolvedBy }` }
               </div>

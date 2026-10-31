@@ -29,7 +29,7 @@ interface Event {
   mode: "cash" | "cheque" | "voucher"
 }
 
-const time = (iso: string) => new Date(iso).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+const time = (iso: string) => new Date(iso).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" })
 
 function buildEvents(view: DayView): Event[] {
   const out: Event[] = []

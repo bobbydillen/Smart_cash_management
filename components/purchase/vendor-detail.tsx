@@ -352,7 +352,7 @@ export default function VendorDetailView({
                       {r.items && <span className="font-normal text-muted-foreground"> · {r.items}</span>}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {new Date(r.createdAt).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      {new Date(r.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                       {" · "}
                       {forBill ? `Bill ${forBill}` : "On account"}
                       {r.creditNote && ` · credit note ${r.creditNote}`} · by {r.by}
@@ -406,7 +406,7 @@ export default function VendorDetailView({
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-medium">
-                        {new Date(p.createdAt).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        {new Date(p.createdAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {forBill ? `Bill ${forBill}` : settled ? `Settles voucher ${settled.number}` : "On account"}
@@ -599,7 +599,7 @@ function VendorTimeline({ events }: { events: TimelineEvent[] }) {
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {e.hasTime
-                    ? new Date(e.at).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                    ? new Date(e.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
                     : new Date(e.at + "T00:00:00Z").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}
                   {e.detail && <> · {e.detail}</>}
                 </div>

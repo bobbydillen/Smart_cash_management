@@ -316,3 +316,36 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* native controls (date pickers, selects, scrollbars) follow the theme */
+:root {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
+}
+
+@layer base {
+  html {
+    /* a focused field is never hidden under the sticky header or the bottom bars */
+    scroll-padding-top: 5rem;
+    scroll-padding-bottom: 9rem;
+  }
+  a,
+  button,
+  [role='button'],
+  input,
+  select,
+  textarea,
+  label,
+  summary {
+    /* no double-tap zoom delay on taps */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+}

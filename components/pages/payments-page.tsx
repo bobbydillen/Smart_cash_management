@@ -348,7 +348,7 @@ export default function PaymentsPage ( {
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{ p.description }</div>
                   <div className="text-xs text-muted-foreground">
-                    { new Date( p.time ).toLocaleTimeString( "en-IN", { hour: "2-digit", minute: "2-digit" } ) }
+                    { new Date( p.time ).toLocaleTimeString( "en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" } ) }
                     { p.transferId && <span className="ml-1.5 align-middle"><StatusChip tone="info" dot={ false }>Transfer</StatusChip></span> }
                     { p.vendorPaymentId && <span className="ml-1.5 align-middle"><StatusChip tone="info" dot={ false }>Vendor</StatusChip></span> }
                   </div>

@@ -339,7 +339,7 @@ export default function AdminEntryDetailModal ( {
                 { handoverOk ? <Check className="size-4" /> : <Clock className="size-4" /> }
                 { handoverOk
                   ? `Available cash checked by counter${ entry.availableCashHandedOverAt
-                    ? " at " + new Date( entry.availableCashHandedOverAt ).toLocaleTimeString( "en-IN", { hour: "2-digit", minute: "2-digit" } )
+                    ? " at " + new Date( entry.availableCashHandedOverAt ).toLocaleTimeString( "en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" } )
                     : "" }`
                   : "Available cash not checked" }
               </div>
@@ -415,7 +415,7 @@ export default function AdminEntryDetailModal ( {
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium">{ p.description }</div>
                         <div className="text-xs text-muted-foreground">
-                          { new Date( p.time ).toLocaleTimeString( "en-IN", { hour: "2-digit", minute: "2-digit" } ) }
+                          { new Date( p.time ).toLocaleTimeString( "en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" } ) }
                         </div>
                       </div>
                       <div className={ `text-sm font-semibold ${ isOut ? "text-danger" : "text-success" }` }>

@@ -41,7 +41,7 @@ import { ask, notify } from "@/components/confirm-host"
 
 const formatTime = ( iso?: string ) =>
   iso
-    ? new Date( iso ).toLocaleTimeString( "en-IN", {
+    ? new Date( iso ).toLocaleTimeString( "en-IN", { timeZone: "Asia/Kolkata",
       hour: "2-digit",
       minute: "2-digit",
     } )

@@ -168,7 +168,7 @@ export default function TransferSection ( {
                     { t.to }
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    { new Date( t.createdAt ).toLocaleTimeString( "en-IN", { hour: "2-digit", minute: "2-digit" } ) }
+                    { new Date( t.createdAt ).toLocaleTimeString( "en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit" } ) }
                     { t.note && ` · ${ t.note }` }
                   </div>
                 </div>
