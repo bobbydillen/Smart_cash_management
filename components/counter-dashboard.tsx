@@ -12,7 +12,6 @@ import
 import type { SerializedUser } from "@/lib/session"
 import type { DayEntry } from "@/lib/types"
 import {
-  LogOut,
   AlertCircle,
   ShieldCheck,
   ShieldAlert,
@@ -21,6 +20,7 @@ import {
   ClipboardCheck,
 } from "lucide-react"
 import StatusChip from "./status-chip"
+import { AppShell, type NavItem } from "./app-shell"
 import { todayIST } from "@/lib/report"
 
 import OpeningVerifyPage from "./pages/opening-verify-page"
@@ -178,124 +178,76 @@ export default function CounterDashboard ( {
     { id: "closing", label: "Closing", icon: ClipboardCheck },
   ] as const
 
+  const stepItems: NavItem[] = steps.map( step => ( {
+    id: step.id,
+    label: step.label,
+    icon: step.icon,
+    active: currentPage === step.id && !showOpening,
+    disabled: mustVerifyFirst,
+    hint: "Verify the opening cash first",
+    onSelect: () =>
+    {
+      setShowOpening( false )
+      setCurrentPage( step.id )
+    },
+  } ) )
+
+  // the opening cash check can be looked at again at any time once it is done
+  const secondaryItems: NavItem[] = mustVerifyFirst
+    ? []
+    : [
+      {
+        id: "opening",
+        label: "Opening cash",
+        icon: entry.openingVerified && openingTone !== "warning" ? ShieldCheck : ShieldAlert,
+        active: showOpening,
+        onSelect: () => setShowOpening( v => !v ),
+      },
+    ]
+
+  const onOpening = mustVerifyFirst || showOpening
+  const pageTitle = onOpening ? "Opening cash" : steps.find( x => x.id === currentPage )!.label
+  const closingBar = !onOpening && currentPage === "closing" && !isReadOnly
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* ================= HEADER ================= */ }
-      <header className="sticky top-0 z-20 border-b bg-card/90 backdrop-blur">
-        <div className="mx-auto w-full max-w-3xl px-4">
-          <div className="flex items-center justify-between gap-3 py-3">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground">
-                { ( user.counterName || "C" ).replace( /^Smart /, "" ).charAt( 0 ) }
-              </div>
-              <div className="min-w-0">
-                <h1 className="truncate text-base font-semibold leading-tight">
-                  { user.counterName }
-                </h1>
-                <p className="truncate text-xs text-muted-foreground">{ longDate }</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              { !mustVerifyFirst && (
-                <Button
-                  variant={ showOpening ? "default" : "outline" }
-                  size="sm"
-                  onClick={ () => setShowOpening( v => !v ) }
-                  aria-label="Opening cash"
-                >
-                  { entry.openingVerified ? (
-                    openingTone === "warning" ? (
-                      <ShieldAlert className="text-warning" />
-                    ) : (
-                      <ShieldCheck className="text-success" />
-                    )
-                  ) : (
-                    <ShieldAlert />
-                  ) }
-                  <span className="hidden sm:inline">Opening cash</span>
-                </Button>
-              ) }
-              <Button
-                onClick={ () => logout() }
-                variant="ghost"
-                size="icon"
-                aria-label="Log out"
-                title="Log out"
-              >
-                <LogOut />
-              </Button>
-            </div>
-          </div>
-
-          {/* status + date */ }
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
-            <div className="flex flex-wrap items-center gap-2">
-              { entry.status === "open" && <StatusChip tone="info">Day open</StatusChip> }
-              { entry.status === "submitted" && (
-                <StatusChip tone="warning">Awaiting admin confirmation</StatusChip>
-              ) }
-              { entry.status === "confirmed" && (
-                <StatusChip tone="success">Confirmed</StatusChip>
-              ) }
-              { entry.openingVerified ? (
-                <StatusChip tone={ openingTone }>
-                  { openingTone === "warning" ? "Opening flagged" : "Opening verified" }
-                </StatusChip>
-              ) : (
-                entry.status === "open" && (
-                  <StatusChip tone="danger">Opening not verified</StatusChip>
-                )
-              ) }
-            </div>
-
-            <div className="flex items-center gap-2">
-            { entry.status === "open" && entry.date === today && entry.openingVerified && !isReadOnly && (
-              <TransferButton refreshEntry={ refreshEntry } onClosed={ () => { refreshEntry() } } />
-            ) }
-            <Input
-              type="date"
-              value={ selectedDate }
-              max={ today }
-              onChange={ ( e ) => handleDateChange( e.target.value ) }
-              className="h-9 w-auto text-sm"
-              aria-label="Select date"
-            />
-            </div>
-          </div>
-
-          {/* steps */ }
-          <nav className="grid grid-cols-3 gap-1.5 pb-3" aria-label="Day steps">
-            { steps.map( ( step, i ) =>
-            {
-              const active = currentPage === step.id && !showOpening
-              const Icon = step.icon
-              return (
-                <button
-                  key={ step.id }
-                  disabled={ mustVerifyFirst }
-                  onClick={ () =>
-                  {
-                    setShowOpening( false )
-                    setCurrentPage( step.id )
-                  } }
-                  className={ `flex items-center justify-center gap-2 rounded-xl px-2 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${ active
-                    ? "bg-primary text-primary-foreground shadow-sm"
-                    : "bg-secondary text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                    }` }
-                >
-                  <Icon className="size-4 shrink-0" />
-                  <span className="hidden min-[400px]:inline">{ i + 1 }.</span>
-                  { step.label }
-                </button>
-              )
-            } ) }
-          </nav>
+    <AppShell
+      nav={ stepItems }
+      secondary={ secondaryItems }
+      user={ { name: user.counterName || "Counter", role: "Counter", onLogout: () => logout() } }
+      title={ pageTitle }
+      subtitle={ `${ user.counterName } · ${ longDate }` }
+      hasBottomBar={ closingBar }
+      headerRight={
+        <div className="flex items-center gap-2">
+          { entry.status === "open" && <StatusChip tone="info">Day open</StatusChip> }
+          { entry.status === "submitted" && <StatusChip tone="warning">Awaiting confirmation</StatusChip> }
+          { entry.status === "confirmed" && <StatusChip tone="success">Confirmed</StatusChip> }
+          { entry.openingVerified ? (
+            <span className="hidden sm:inline-flex">
+              <StatusChip tone={ openingTone }>{ openingTone === "warning" ? "Opening flagged" : "Opening verified" }</StatusChip>
+            </span>
+          ) : (
+            entry.status === "open" && <StatusChip tone="danger">Opening not verified</StatusChip>
+          ) }
         </div>
-      </header>
-
-      {/* ================= MAIN ================= */ }
-      <main className="mx-auto w-full max-w-3xl space-y-5 px-4 py-5 pb-24">
+      }
+      toolbar={
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            type="date"
+            value={ selectedDate }
+            max={ today }
+            onChange={ ( e ) => handleDateChange( e.target.value ) }
+            className="h-10 w-auto text-sm"
+            aria-label="Select date"
+          />
+          { entry.status === "open" && entry.date === today && entry.openingVerified && !isReadOnly && (
+            <TransferButton refreshEntry={ refreshEntry } onClosed={ () => { refreshEntry() } } />
+          ) }
+        </div>
+      }
+    >
+      <div className="space-y-5">
         { entry.status === "open" && entry.date === today && (
           <IncomingTransfersBanner
             canAccept={ !!entry.openingVerified }
@@ -303,7 +255,7 @@ export default function CounterDashboard ( {
           />
         ) }
 
-        { ( mustVerifyFirst || showOpening ) && entry.openingDenominations && (
+        { onOpening && entry.openingDenominations && (
           <OpeningVerifyPage
             entry={ entry }
             isReadOnly={ isReadOnly }
@@ -312,7 +264,7 @@ export default function CounterDashboard ( {
           />
         ) }
 
-        { !mustVerifyFirst && !showOpening && currentPage === "payments" && (
+        { !onOpening && currentPage === "payments" && (
           <PaymentsPage
             entry={ entry }
             refreshEntry={ refreshEntry }
@@ -323,7 +275,7 @@ export default function CounterDashboard ( {
           />
         ) }
 
-        { !mustVerifyFirst && !showOpening && currentPage === "sales" && (
+        { !onOpening && currentPage === "sales" && (
           <SalesPage
             entry={ entry }
             isReadOnly={ isReadOnly }
@@ -334,7 +286,7 @@ export default function CounterDashboard ( {
           />
         ) }
 
-        { !mustVerifyFirst && !showOpening && currentPage === "closing" && (
+        { !onOpening && currentPage === "closing" && (
           <ClosingPage
             key={ entry.date }
             entry={ entry }
@@ -346,7 +298,7 @@ export default function CounterDashboard ( {
             }
           />
         ) }
-      </main>
-    </div>
+      </div>
+    </AppShell>
   )
 }

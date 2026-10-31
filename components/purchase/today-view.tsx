@@ -331,7 +331,7 @@ export default function TodayView({
         )}
 
         <GroupLabel>Notes</GroupLabel>
-        <div className="space-y-1.5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {noteRows.map(([label, key, value]) => (
             <DenomRow
               key={key}
@@ -344,7 +344,7 @@ export default function TodayView({
           ))}
         </div>
         <GroupLabel>Coins</GroupLabel>
-        <div className="space-y-1.5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {coinRows.map(([label, key, value]) => (
             <DenomRow
               key={key}

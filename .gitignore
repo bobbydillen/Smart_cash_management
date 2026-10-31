@@ -36,3 +36,5 @@ __pycache__/
 
 # taste-skill working files
 /.taste-skill/
+/.sess.mjs
+/.peek.mjs

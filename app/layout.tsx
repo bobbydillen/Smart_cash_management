@@ -20,7 +20,15 @@ export default function RootLayout ( {
 }> )
 {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* applies the saved (or device) light/dark choice before the first paint, so there is no flash */}
+        <script
+          dangerouslySetInnerHTML={ {
+            __html: `try{var t=localStorage.getItem("theme");if(t==="dark"||(!t&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}`,
+          } }
+        />
+      </head>
       <body className={ `${ geist.variable } ${ geistMono.variable } font-sans antialiased` }>
         { children }
         <Analytics />

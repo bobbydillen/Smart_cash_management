@@ -22,6 +22,8 @@ import
   getOpeningCashForDate,
 } from "@/app/actions/counter"
 import {
+  ArrowDown,
+  ArrowUp,
   Printer,
   Check,
   Pencil,
@@ -33,6 +35,7 @@ import {
   Wand2,
 } from "lucide-react"
 import SectionHeader from "@/components/section-header"
+import { ShellBar } from "@/components/app-shell"
 import { inr as fmt } from "@/lib/report"
 import StatusChip from "@/components/status-chip"
 import { Switch } from "@/components/ui/switch"
@@ -653,6 +656,8 @@ export default function ClosingPage ( {
   ]
   const readyToSubmit = checklist.every( c => c.done )
 
+  const bar = ( n: number ) => ( Number.isInteger( n ) ? n.toLocaleString( "en-IN" ) : fmt( n ) )
+
   const noteRows = DENOMS.filter( d => NOTE_KEYS.includes( d[ 1 ] as any ) )
   const coinRows = DENOMS.filter( d => COIN_KEYS.includes( d[ 1 ] as any ) )
 
@@ -677,7 +682,7 @@ export default function ClosingPage ( {
         ) }
 
         <GroupLabel>Notes</GroupLabel>
-        <div className="space-y-1.5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           { noteRows.map( ( [ l, k, v ] ) => (
             <DenomRow
               key={ k }
@@ -691,7 +696,7 @@ export default function ClosingPage ( {
         </div>
 
         <GroupLabel>Coins</GroupLabel>
-        <div className="space-y-1.5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           { coinRows.map( ( [ l, k, v ] ) => (
             <DenomRow
               key={ k }
@@ -824,7 +829,7 @@ export default function ClosingPage ( {
         >
           Coins
         </GroupLabel>
-        <div className="space-y-1.5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           { coinRows.map( ( [ l, k, v ] ) => (
             <DenomRow
               key={ k }
@@ -840,7 +845,7 @@ export default function ClosingPage ( {
         </div>
 
         <GroupLabel>Notes</GroupLabel>
-        <div className="space-y-1.5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           { noteRows.map( ( [ l, k, v ] ) => (
             <DenomRow
               key={ k }
@@ -1305,27 +1310,57 @@ export default function ClosingPage ( {
           <Printer /> Print cash summary
         </Button>
       ) : (
-        <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-card/95 backdrop-blur">
-          <div className="mx-auto flex w-full max-w-3xl gap-2 px-4 py-3">
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={ handlePrint }
-              aria-label="Print cash summary"
-              title="Print cash summary"
-            >
-              <Printer />
-            </Button>
-            <Button
-              size="lg"
-              className="flex-1"
-              onClick={ handleSubmit }
-              disabled={ !readyToSubmit }
-            >
-              { readyToSubmit ? "Submit day" : "Complete the checklist to submit" }
-            </Button>
+        <ShellBar>
+          {/* running totals stay in view while counting: expected, counted, and the difference in words */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <dl className="grid flex-1 grid-cols-[auto_auto_1fr] gap-x-4 gap-y-1 text-sm" aria-live="polite">
+              <div>
+                <dt className="text-xs text-muted-foreground">Expected</dt>
+                <dd className="font-semibold tabular-nums">₹{ bar( expectedCash ) }</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-muted-foreground">Counted</dt>
+                <dd className="font-semibold tabular-nums">₹{ bar( actualCash ) }</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="text-xs text-muted-foreground">Difference</dt>
+                <dd>
+                  { Math.abs( shortage ) < 0.005 ? (
+                    <span className="inline-flex items-center gap-1 font-medium text-success"><Check className="size-4" aria-hidden /> Balanced</span>
+                  ) : shortage > 0 ? (
+                    <span className="inline-flex items-center gap-1 font-semibold text-danger"><ArrowDown className="size-4 shrink-0" aria-hidden /> Short <span className="tabular-nums">₹{ bar( shortage ) }</span></span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 font-semibold text-info"><ArrowUp className="size-4 shrink-0" aria-hidden /> Excess <span className="tabular-nums">₹{ bar( -shortage ) }</span></span>
+                  ) }
+                </dd>
+              </div>
+            </dl>
+            <div className="flex w-full gap-2 sm:w-auto">
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={ handlePrint }
+                aria-label="Print cash summary"
+                title="Print cash summary"
+              >
+                <Printer />
+              </Button>
+              <Button
+                size="lg"
+                className="flex-1 sm:flex-none sm:px-8"
+                onClick={ handleSubmit }
+                disabled={ !readyToSubmit }
+              >
+                Submit day
+              </Button>
+            </div>
           </div>
-        </div>
+          { !readyToSubmit && (
+            <p className="mt-2 hidden text-xs text-muted-foreground sm:block">
+              Still to do: { checklist.filter( c => !c.done ).map( c => c.label ).join( " · " ) }
+            </p>
+          ) }
+        </ShellBar>
       ) }
 
     </div>

@@ -53,9 +53,9 @@ export function CashReceivedForm({ onClose, onDone }: { onClose: () => void; onD
 
         <div>
           <GroupLabel>Notes</GroupLabel>
-          <div className="space-y-2">{rows(NOTE_KEYS)}</div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{rows(NOTE_KEYS)}</div>
           <GroupLabel>Coins</GroupLabel>
-          <div className="space-y-2">{rows(COIN_KEYS)}</div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">{rows(COIN_KEYS)}</div>
         </div>
 
         <Field label="Note">

@@ -1,5 +1,6 @@
 "use client"
 
+import { useId } from "react"
 import type React from "react"
 import { Button } from "@/components/ui/button"
 import { Minus, Plus } from "lucide-react"
@@ -14,8 +15,8 @@ export function GroupLabel ( {
 } )
 {
   return (
-    <div className="mb-2 mt-5 flex items-center justify-between">
-      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="mb-2 mt-6 flex items-center justify-between">
+      <span className="text-sm font-semibold text-muted-foreground">
         { children }
       </span>
       { right }
@@ -23,7 +24,11 @@ export function GroupLabel ( {
   )
 }
 
-/** One denomination: label, - / + stepper, amount. */
+/**
+ * One denomination as a card: the value and its subtotal on top, a large stepper below.
+ * The buttons are 44 px, the number is right under the label (and tied to it), and the phone
+ * shows the numeric keypad. Lay several out in a grid (2 across on a phone).
+ */
 export function DenomRow ( {
   label,
   count,
@@ -42,59 +47,60 @@ export function DenomRow ( {
   sub?: string
 } )
 {
+  const id = useId()
   const clamp = ( n: number ) => Math.max( 0, max === undefined ? n : Math.min( n, max ) )
   return (
-    <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 rounded-xl border bg-card px-3 py-2 sm:grid-cols-[4rem_1fr_6rem]">
-      <div className="min-w-0">
-        <div className="text-sm font-semibold">{ label }</div>
-        { sub && <div className="text-xs text-muted-foreground">{ sub }</div> }
+    <div className="rounded-xl border bg-card p-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <label htmlFor={ id } className="text-base font-semibold">
+          { label }
+          { sub && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{ sub }</span> }
+        </label>
+        <span className="text-sm tabular-nums text-muted-foreground">
+          ₹{ amount.toLocaleString( "en-IN", { maximumFractionDigits: 0 } ) }
+        </span>
       </div>
 
-      <div className="col-span-2 row-start-2 flex items-center justify-center gap-1.5 sm:col-span-1 sm:col-start-2 sm:row-start-1">
-        { !disabled && (
+      { disabled ? (
+        <output id={ id } className="mt-2 block text-xl font-semibold tabular-nums">{ count }</output>
+      ) : (
+        <div className="mt-2 flex items-center gap-1.5">
           <Button
             type="button"
             variant="outline"
             size="icon"
-            className="size-9 rounded-full"
+            className="size-11 shrink-0"
             onClick={ () => onSet( clamp( count - 1 ) ) }
             disabled={ count <= 0 }
-            aria-label={ `Decrease ${ label }` }
+            aria-label={ `Fewer ${ label }` }
           >
             <Minus />
           </Button>
-        ) }
-        <input
-          type="number"
-          inputMode="numeric"
-          min={ 0 }
-          max={ max }
-          value={ count }
-          disabled={ disabled }
-          onChange={ e => onSet( clamp( Math.floor( Number( e.target.value ) || 0 ) ) ) }
-          onWheel={ e => ( e.target as HTMLInputElement ).blur() }
-          onFocus={ e => e.target.select() }
-          className="h-9 w-16 rounded-lg border bg-card text-center text-sm font-semibold outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:border-transparent disabled:bg-transparent"
-          aria-label={ `${ label } quantity` }
-        />
-        { !disabled && (
+          <input
+            id={ id }
+            type="number"
+            inputMode="numeric"
+            min={ 0 }
+            max={ max }
+            value={ count }
+            onChange={ e => onSet( clamp( Math.floor( Number( e.target.value ) || 0 ) ) ) }
+            onWheel={ e => ( e.target as HTMLInputElement ).blur() }
+            onFocus={ e => e.target.select() }
+            className="h-11 min-w-0 flex-1 rounded-lg border bg-card text-center text-lg font-semibold tabular-nums outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          />
           <Button
             type="button"
             variant="outline"
             size="icon"
-            className="size-9 rounded-full"
+            className="size-11 shrink-0"
             onClick={ () => onSet( clamp( count + 1 ) ) }
             disabled={ max !== undefined && count >= max }
-            aria-label={ `Increase ${ label }` }
+            aria-label={ `More ${ label }` }
           >
             <Plus />
           </Button>
-        ) }
-      </div>
-
-      <div className="col-start-2 row-start-1 text-right text-sm font-medium tabular-nums sm:col-start-3">
-        ₹{ amount.toLocaleString( "en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 } ) }
-      </div>
+        </div>
+      ) }
     </div>
   )
 }

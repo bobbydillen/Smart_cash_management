@@ -212,6 +212,15 @@
   --table-row-h-compact: 2.25rem;
   --denom-row-h: 3.5rem;
   --header-h: 3.5rem;
+
+  /* app shell: the sidebar on a computer, a bar of tabs at the bottom on a phone */
+  --sidebar-w: 14rem;
+  --tabs-h: calc(4.25rem + env(safe-area-inset-bottom));
+}
+@media (min-width: 768px) {
+  :root {
+    --tabs-h: 0px;
+  }
 }
 
 @theme inline {
