@@ -84,3 +84,9 @@ WCAG AA text contrast, visible 2 px focus ring on every control (`--ring`), a la
 ## What is not decided here
 
 The **layout** of the key screens (counter dashboard, closing page, admin dashboard). Those need a choice between directions and are shown as options next.
+
+## Decision
+
+Layout direction **B, "Framed sheet"** was chosen for the counter dashboard, the closing page and the admin dashboard (previews were compared at phone, tablet and desktop widths, then removed).
+
+Deliberate differences from the art-direction skill's defaults: the brand accent stays the existing indigo (staff already know it) rather than a near-black-only palette, and the primary action keeps the brand colour so it is easy to find on a phone. Sentence case is used for headings and buttons.

@@ -56,3 +56,9 @@ Business logic, server actions, data and formulas were not touched.
 ## What was inspected
 
 All of `app/` and `components/` (excluding `components/ui/` primitives, which are unmodified shadcn), `app/globals.css`, `app/layout.tsx`. Not inspected: real Lighthouse scores (no Lighthouse run yet), screen-reader behaviour with real assistive technology, and any screen needing data the test database does not have (for example a submitted day awaiting admin confirmation on today's date).
+
+## Status after the redesign
+
+Everything under "Open" above was addressed in the redesign except two items, listed in `docs/ui-changes.md` under "Not verified, or left as it is" (steps are not separate addresses; the counter page's full-page spinner on refresh). Measured results are in the same file.
+
+The first version of the dark theme had unchecked contrast; all text pairs now pass (see `docs/design-direction.md`).
