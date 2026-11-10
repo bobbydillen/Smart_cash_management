@@ -46,7 +46,25 @@ interface Result {
   total_digital: number
   implied_cash: number
   issues: Issue[]
-  unassigned: { amount: number; source: string; ref: string; time: string }[]
+  unassigned: {
+    amount: number
+    source: string
+    ref: string
+    time: string
+    suspects: { shop: string; bill: string; time: string; net: number; gap_min: number | null; total: number }[]
+  }[]
+  splits: { shop: string; bill: string; time: string; net: number; digital: number; cash: number; source: string; note?: string }[]
+  proof: {
+    card_by_shop: Record<string, number>
+    received_by_source: Record<string, number>
+    total_card: number
+    total_received: number
+    difference: number
+    unmatched_bills: number
+    unassigned_payments: number
+    amount_differences: number
+    unexplained: number
+  }
   shops: Record<string, { bills: number; net: number; recorded_card: number; confirmed_digital: number; implied_cash: number }>
   sources: Record<string, { count: number; total: number; per_shop: Record<string, number> }>
   xlsx: string
@@ -166,6 +184,8 @@ function pillFor(st: string): { tone: "danger" | "warning" | "info" | "success";
   if (st.includes("Unmatched")) return { tone: "danger", text: "Unmatched" }
   if (st.includes("Excess")) return { tone: "warning", text: "Excess digital" }
   if (st.includes("Cross")) return { tone: "info", text: "Cross-shop" }
+  if (st.includes("Amount Differs")) return { tone: "warning", text: "Amount differs" }
+  if (st.includes("Time Gap")) return { tone: "warning", text: "Time gap" }
   if (st.includes("Combined")) return { tone: "info", text: "Combined payment" }
   if (st.includes("Split")) return { tone: "info", text: "Split payment" }
   return { tone: "success", text: st }
@@ -264,6 +284,38 @@ function Results({ s }: { s: Result }) {
       </div>
 
       <Card className="p-5">
+        <SectionHeader title="Proof: card sales − money received" subtitle="Every shop's card/digital sales minus Federal Bank, PhonePe, card machines and transfers. The gap must be fully explained." />
+        <div className="mt-3 overflow-x-auto rounded-xl border">
+          <table className="w-full text-sm">
+            <tbody className="divide-y">
+              {([
+                ...Object.entries(s.proof.card_by_shop).map(([n, v]) => ["Card sales · " + n, v, false] as const),
+                ["A. Total card sales", s.proof.total_card, true],
+                ...Object.entries(s.proof.received_by_source).map(([n, v]) => ["Received · " + n, v, false] as const),
+                ["B. Total money received", s.proof.total_received, true],
+                ["Difference (A − B)", s.proof.difference, true],
+                ["+ Bills marked card but no payment", s.proof.unmatched_bills, false],
+                ["− Payments that match no bill", -s.proof.unassigned_payments, false],
+                ["− Amount differences on matched bills", -s.proof.amount_differences, false],
+              ] as const).map(([label, v, bold], i) => (
+                <tr key={i} className={bold ? "font-semibold" : ""}>
+                  <td className="px-3 py-2">{label}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{inr(v)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {Math.abs(s.proof.unexplained) < 0.005 ? (
+          <div className="mt-3 rounded-xl bg-success-soft px-4 py-3 text-sm font-medium text-success">✓ Fully explained: nothing is left unexplained. Review the items below to decide what each one is.</div>
+        ) : (
+          <div role="alert" className="mt-3 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
+            ⚠ {inr(Math.abs(s.proof.unexplained))} is unexplained, so something is wrong with the inputs (missing or duplicated file?).
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-5">
         <SectionHeader title="Items needing a look" subtitle="Bills whose digital payment could not be confirmed" />
         {issues.length ? (
           <Table
@@ -282,7 +334,47 @@ function Results({ s }: { s: Result }) {
             title={`${s.unassigned.length} payment${s.unassigned.length === 1 ? "" : "s"} matched no bill · ${inr(s.unassigned.reduce((a, p) => a + p.amount, 0))}`}
             subtitle="Money arrived but fits no bill. Check for a missing bill, duplicate or tip."
           />
-          <Table heads={["Amount", "Source", "Reference", "Time / date"]} num={[0]} rows={s.unassigned.map((p) => [inr(p.amount), p.source, p.ref, p.time])} />
+          <Table
+            heads={["Amount", "Source", "Reference", "Time / date", "Likely explanation"]}
+            num={[0]}
+            rows={s.unassigned.map((p) => [
+              inr(p.amount),
+              p.source,
+              p.ref,
+              p.time,
+              p.suspects?.length ? (
+                <div key="x" className="min-w-[18rem] space-y-1">
+                  {p.suspects.map((x, k) => (
+                    <div key={k}>
+                      Bill <b>{x.bill}</b> ({x.shop}, {x.time}, {inr(x.net)}) was marked as <b>cash</b>, but this was paid through <b>{p.source}</b>
+                      {x.gap_min != null ? ` (${x.gap_min} min from the bill)` : ""}.
+                    </div>
+                  ))}
+                  {p.suspects[0].total > p.suspects.length ? (
+                    <div className="text-xs text-muted-foreground">…and {p.suspects[0].total - p.suspects.length} more cash bills with this exact amount</div>
+                  ) : p.suspects.length > 1 ? (
+                    <div className="text-xs text-muted-foreground">Only one of these can be the right bill.</div>
+                  ) : null}
+                </div>
+              ) : (
+                <span key="x" className="text-xs text-muted-foreground">No cash bill with this amount: a test payment, or a bill that is missing.</span>
+              ),
+            ])}
+          />
+        </Card>
+      )}
+
+      {s.splits?.length > 0 && (
+        <Card className="p-5">
+          <SectionHeader
+            title={`${s.splits.length} bill${s.splits.length === 1 ? "" : "s"} paid part cash, part digital`}
+            subtitle={`Digital part ${inr(s.splits.reduce((a, x) => a + x.digital, 0))} is checked against payments; cash part ${inr(s.splits.reduce((a, x) => a + x.cash, 0))} (Net − Card) is accepted as cash received.`}
+          />
+          <Table
+            heads={["Shop", "Bill", "Time", "Net", "Paid digitally", "Cash part", "Digital via", ""]}
+            num={[3, 4, 5]}
+            rows={s.splits.map((x) => [x.shop, x.bill, x.time, inr(x.net), inr(x.digital), inr(x.cash), x.source, x.note ? <StatusChip key="r" tone="success">rounding</StatusChip> : ""])}
+          />
         </Card>
       )}
 
@@ -349,6 +441,7 @@ export default function ReconciliationPage({ token }: { token: string | null }) 
   const [ppFiles, setPpFiles] = useState<File[]>([])
   const [machines, setMachines] = useState<Machine[]>([newMachine(0)])
   const [transfers, setTransfers] = useState("")
+  const [combos, setCombos] = useState(true)
   const [running, setRunning] = useState(false)
   const [seconds, setSeconds] = useState(0)
   const [error, setError] = useState("")
@@ -396,6 +489,7 @@ export default function ReconciliationPage({ token }: { token: string | null }) 
       if (m.csv[0]) fd.append(`mcsv_${j}`, m.csv[0])
     })
     fd.append("transfers", transfers)
+    fd.append("combos", combos ? "1" : "0")
 
     setRunning(true)
     setSeconds(0)
@@ -623,6 +717,13 @@ export default function ReconciliationPage({ token }: { token: string | null }) 
                 )
               })}
             </div>
+
+            <label className="mt-6 flex items-start gap-2 text-sm text-muted-foreground">
+              <input type="checkbox" checked={combos} onChange={(e) => setCombos(e.target.checked)} className="mt-1 size-4" />
+              <span>
+                <b className="text-foreground">Also detect combined / split payments</b> (one payment for several bills, or one bill paid in parts). Untick to match only one payment to one bill. Payments under ₹20 are never merged.
+              </span>
+            </label>
 
             {/* transfers */}
             <div className="mt-6 flex items-center gap-2 text-sm font-semibold">
